@@ -98,6 +98,9 @@ function isManagedOAuthContext(): boolean {
 /** Whether we are supporting direct 1P auth. */
 // this code is closely related to getAuthTokenSource
 export function isAnthropicAuthEnabled(): boolean {
+  // HealthAgent: custom endpoint means no Anthropic OAuth needed.
+  if (process.env.HEALTHAGENT_API_BASE_URL) return false
+
   // --bare: API-key-only, never OAuth.
   if (isBareMode()) return false
 

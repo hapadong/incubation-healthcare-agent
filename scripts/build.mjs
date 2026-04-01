@@ -71,7 +71,7 @@ module.exports = { SandboxManager, BaseSandboxManager: SandboxManager,
   normalizePathForSandbox: p => p }`,
     '@ant/claude-for-chrome-mcp': 'module.exports = {}',
     'color-diff-napi': `module.exports = {
-  ColorDiff: class { diff() { return [] } },
+  ColorDiff: class { diff() { return [] } render() { return null } },
   ColorFile: class {},
   getSyntaxTheme: () => null }`,
     'modifiers-napi': 'module.exports = { isModifierPressed: () => false }',

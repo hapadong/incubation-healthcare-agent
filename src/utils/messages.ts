@@ -818,6 +818,8 @@ export function normalizeMessages(messages: Message[]): NormalizedMessage[] {
           } as NormalizedMessage
         })
       }
+      default:
+        return []
     }
   })
 }

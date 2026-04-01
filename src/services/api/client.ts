@@ -23,79 +23,121 @@ function buildOpenAIAdapter(): Anthropic | null {
 
   const apiKey = process.env.HEALTHAGENT_API_KEY ?? 'not-required'
   const isAzure = baseURL.includes('.openai.azure.com')
+  // The Azure OpenAI /v1 compatibility endpoint works with the plain OpenAI SDK.
+  // Strip any trailing /openai/v1 or /v1 for AzureOpenAI SDK (which builds its own path).
+  const azureEndpoint = baseURL.replace(/\/openai\/v1\/?$/, '').replace(/\/v1\/?$/, '')
+  const isV1Compat = isAzure && baseURL !== azureEndpoint
+  const apiVersion = process.env.HEALTHAGENT_AZURE_API_VERSION ?? '2025-01-01-preview'
 
-  const openai: OpenAI = isAzure
+  const openai: OpenAI = isAzure && !isV1Compat
     ? new AzureOpenAI({
-        endpoint: baseURL,
+        endpoint: azureEndpoint,
         apiKey,
         deployment: process.env.HEALTHAGENT_AZURE_DEPLOYMENT ?? process.env.HEALTHAGENT_MODEL ?? 'gpt-4o',
-        apiVersion: process.env.HEALTHAGENT_AZURE_API_VERSION ?? '2025-01-01-preview',
+        apiVersion,
       })
-    : new OpenAI({ baseURL, apiKey })
+    : new OpenAI({
+        baseURL,
+        apiKey,
+        // Azure v1-compat endpoint (/openai/v1) uses api-key header but NOT api-version
+        ...(isAzure ? {
+          defaultHeaders: { 'api-key': apiKey },
+        } : {}),
+      })
 
-  // Adapter: wraps OpenAI client to match Anthropic SDK interface
-  // The rest of the codebase calls anthropic.beta.messages.create(params)
+  // Build a fake HTTP Response object for rate-limit header extraction
+  const makeFakeResponse = () => new Response(null, {
+    status: 200,
+    headers: new Headers({ 'request-id': '' }),
+  })
+
+  // Core message call: returns the data (stream or non-stream)
+  const callMessages = async (params: Record<string, unknown>): Promise<unknown> => {
+    // Always use HEALTHAGENT_MODEL when set — Claude Code passes its own model IDs
+    // (e.g. claude-opus-4-5) which don't exist on Azure/OpenAI endpoints.
+    const model = process.env.HEALTHAGENT_MODEL
+      ?? (params.model as string | undefined)
+      ?? 'gpt-4o'
+
+    // Convert Anthropic message format to OpenAI format
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = []
+
+    // Anthropic uses a top-level 'system' field; OpenAI uses a system message
+    if (params.system) {
+      const systemContent = typeof params.system === 'string'
+        ? params.system
+        : Array.isArray(params.system)
+          ? (params.system as Array<{type: string, text: string}>)
+              .filter(b => b.type === 'text')
+              .map(b => b.text)
+              .join('\n')
+          : String(params.system)
+      messages.push({ role: 'system', content: systemContent })
+    }
+
+    // Convert content blocks to plain strings for OpenAI
+    for (const msg of (params.messages as Array<{role: string, content: unknown}> ?? [])) {
+      const content = typeof msg.content === 'string'
+        ? msg.content
+        : Array.isArray(msg.content)
+          ? (msg.content as Array<Record<string, unknown>>)
+              .filter((b) => b.type === 'text')
+              .map((b) => b.text as string)
+              .join('\n')
+          : String(msg.content)
+      messages.push({ role: msg.role as 'user' | 'assistant', content })
+    }
+
+    // Cap at 16384 — Azure gpt-4o deployment limit; Claude Code requests up to 32000
+    const maxTokens = Math.min((params.max_tokens as number | undefined) ?? 4096, 16384)
+
+    if (params.stream === true) {
+      const stream = await openai.chat.completions.create({
+        model,
+        messages,
+        max_tokens: maxTokens,
+        stream: true,
+      })
+      return openaiStreamToAnthropicStream(stream, model)
+    }
+
+    const response = await openai.chat.completions.create({
+      model,
+      messages,
+      max_tokens: maxTokens,
+      stream: false,
+    })
+    return openaiResponseToAnthropic(response, model)
+  }
+
+  // Adapter: wraps OpenAI client to match Anthropic SDK interface.
+  // The codebase calls either:
+  //   anthropic.beta.messages.create(params).withResponse()  → { data, response, request_id }
+  //   await anthropic.beta.messages.create(params)           → data directly
+  const makeAPIPromise = (params: Record<string, unknown>) => {
+    // Build a thenable that also has .withResponse()
+    const dataPromise = callMessages(params)
+    const apiPromise: Promise<unknown> & { withResponse: () => Promise<{data: unknown, response: Response, request_id: string}> } = Object.assign(
+      dataPromise,
+      {
+        withResponse: async () => {
+          const data = await dataPromise
+          return { data, response: makeFakeResponse(), request_id: '' }
+        },
+      }
+    )
+    return apiPromise
+  }
+
   const adapter = {
     beta: {
       messages: {
-        create: async (params: Record<string, unknown>) => {
-          const model = (params.model as string | undefined)
-            ?? process.env.HEALTHAGENT_MODEL
-            ?? 'gpt-4o'
-
-          // Convert Anthropic message format to OpenAI format
-          const messages: OpenAI.Chat.ChatCompletionMessageParam[] = []
-
-          // Anthropic uses a top-level 'system' field; OpenAI uses a system message
-          if (params.system) {
-            messages.push({ role: 'system', content: params.system as string })
-          }
-
-          // Convert content blocks to plain strings for OpenAI
-          for (const msg of (params.messages as Array<{role: string, content: unknown}> ?? [])) {
-            const content = typeof msg.content === 'string'
-              ? msg.content
-              : Array.isArray(msg.content)
-                ? msg.content
-                    .filter((b: Record<string, unknown>) => b.type === 'text')
-                    .map((b: Record<string, unknown>) => b.text as string)
-                    .join('\n')
-                : String(msg.content)
-            messages.push({ role: msg.role as 'user' | 'assistant', content })
-          }
-
-          const isStreaming = params.stream === true
-
-          if (isStreaming) {
-            // Return a stream that emits Anthropic-format SSE events
-            const stream = await openai.chat.completions.create({
-              model,
-              messages,
-              max_tokens: params.max_tokens as number ?? 4096,
-              stream: true,
-            })
-
-            // Convert OpenAI stream to Anthropic stream format
-            return openaiStreamToAnthropicStream(stream, model)
-          }
-
-          // Non-streaming
-          const response = await openai.chat.completions.create({
-            model,
-            messages,
-            max_tokens: params.max_tokens as number ?? 4096,
-            stream: false,
-          })
-
-          return openaiResponseToAnthropic(response, model)
-        },
+        create: (params: Record<string, unknown>) => makeAPIPromise(params),
       },
     },
     // Passthrough for non-message operations (auth check, etc.)
     messages: {
-      create: async (params: Record<string, unknown>) => {
-        return adapter.beta.messages.create(params)
-      },
+      create: (params: Record<string, unknown>) => makeAPIPromise(params),
     },
     apiKey,
     baseURL,

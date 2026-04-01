@@ -31,6 +31,11 @@ export function getCLISyspromptPrefix(options?: {
   isNonInteractive: boolean
   hasAppendSystemPrompt: boolean
 }): CLISyspromptPrefix {
+  // HealthAgent: allow overriding the identity prefix via env var
+  if (process.env.HEALTHAGENT_SYSTEM_PREFIX) {
+    return process.env.HEALTHAGENT_SYSTEM_PREFIX as CLISyspromptPrefix
+  }
+
   const apiProvider = getAPIProvider()
   if (apiProvider === 'vertex') {
     return DEFAULT_PREFIX
