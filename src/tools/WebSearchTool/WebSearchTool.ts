@@ -82,7 +82,7 @@ async function callWithConfiguredSearch(
   const provider = process.env.HEALTHAGENT_SEARCH_PROVIDER ?? 'brave'
   const apiKey = process.env.HEALTHAGENT_SEARCH_API_KEY!
 
-  let hits: { title: string; url: string }[] = []
+  const results: (SearchResult | string)[] = []
 
   if (provider === 'tavily') {
     const res = await fetch('https://api.tavily.com/search', {
@@ -92,12 +92,33 @@ async function callWithConfiguredSearch(
         api_key: apiKey,
         query,
         max_results: 10,
+        include_answer: true,
+        include_raw_content: false,
         include_domains: allowed_domains ?? [],
         exclude_domains: blocked_domains ?? [],
       }),
     })
-    const data = await res.json() as { results: { title: string; url: string }[] }
-    hits = (data.results ?? []).map(r => ({ title: r.title, url: r.url }))
+    const data = await res.json() as {
+      answer?: string
+      results: { title: string; url: string; content?: string }[]
+    }
+
+    // Tavily answer: AI-synthesized summary across all results
+    if (data.answer) {
+      results.push(`Summary: ${data.answer}`)
+    }
+
+    // Individual results with extracted page content
+    const hits = (data.results ?? []).map(r => ({ title: r.title, url: r.url }))
+    results.push({ tool_use_id: 'ha-search-1', content: hits })
+
+    // Append per-result snippets so the agent can analyze without fetching each page
+    const snippets = (data.results ?? [])
+      .filter(r => r.content)
+      .map(r => `[${r.title}](${r.url})\n${r.content}`)
+      .join('\n\n')
+    if (snippets) results.push(snippets)
+
   } else {
     // Brave (default)
     const params = new URLSearchParams({ q: query, count: '10' })
@@ -111,23 +132,34 @@ async function callWithConfiguredSearch(
       },
     )
     const data = await res.json() as {
-      web?: { results: { title: string; url: string }[] }
+      web?: { results: { title: string; url: string; description?: string }[] }
     }
-    hits = (data.web?.results ?? []).map(r => ({ title: r.title, url: r.url }))
 
-    // Apply domain filters client-side (Brave doesn't support server-side)
+    let raw = data.web?.results ?? []
+
+    // Apply domain filters client-side
     if (allowed_domains?.length) {
-      hits = hits.filter(h => allowed_domains.some(d => h.url.includes(d)))
+      raw = raw.filter(r => allowed_domains.some(d => r.url.includes(d)))
     }
     if (blocked_domains?.length) {
-      hits = hits.filter(h => !blocked_domains.some(d => h.url.includes(d)))
+      raw = raw.filter(r => !blocked_domains.some(d => r.url.includes(d)))
     }
+
+    const hits = raw.map(r => ({ title: r.title, url: r.url }))
+    results.push({ tool_use_id: 'ha-search-1', content: hits })
+
+    // Append descriptions so the agent can analyze without fetching each page
+    const snippets = raw
+      .filter(r => r.description)
+      .map(r => `[${r.title}](${r.url})\n${r.description}`)
+      .join('\n\n')
+    if (snippets) results.push(snippets)
   }
 
   return {
     data: {
       query,
-      results: [{ tool_use_id: 'ha-search-1', content: hits }],
+      results,
       durationSeconds: (performance.now() - startTime) / 1000,
     },
   }
