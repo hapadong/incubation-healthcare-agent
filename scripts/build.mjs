@@ -49,10 +49,51 @@ async function ensureEsbuild() {
   }
 }
 
+// Ensure stubs for internal Anthropic packages that are never published to npm
+async function ensureInternalStubs() {
+  const NODE_MODULES = join(ROOT, 'node_modules')
+
+  const stubs = {
+    '@anthropic-ai/bedrock-sdk': 'module.exports = {}',
+    '@anthropic-ai/foundry-sdk': 'module.exports = {}',
+    '@anthropic-ai/mcpb': 'module.exports = {}',
+    '@anthropic-ai/sandbox-runtime': `
+const SandboxManager = {
+  getFsReadConfig: () => ({ allowedPaths: [] }),
+  getFsWriteConfig: () => ({ allowedPaths: [] }),
+  checkDependencies: async () => ({ available: false }),
+  isSupportedPlatform: () => false,
+  wrapWithSandbox: async (_c, _a, opts) => opts ?? {},
+  getDangerousDirectories: () => [],
+}
+module.exports = { SandboxManager, BaseSandboxManager: SandboxManager,
+  createSandbox: async () => {}, isSandboxAvailable: () => false,
+  normalizePathForSandbox: p => p }`,
+    '@ant/claude-for-chrome-mcp': 'module.exports = {}',
+    'color-diff-napi': `module.exports = {
+  ColorDiff: class { diff() { return [] } },
+  ColorFile: class {},
+  getSyntaxTheme: () => null }`,
+    'modifiers-napi': 'module.exports = { isModifierPressed: () => false }',
+  }
+
+  for (const [pkg, content] of Object.entries(stubs)) {
+    const dir = join(NODE_MODULES, pkg)
+    if (!await exists(dir)) {
+      await mkdir(dir, { recursive: true })
+      await writeFile(join(dir, 'index.js'), content.trim())
+      await writeFile(join(dir, 'package.json'),
+        JSON.stringify({ name: pkg, version: '0.0.0', main: 'index.js' }))
+    }
+  }
+  console.log('✅ Internal package stubs ensured')
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // PHASE 1: Copy source
 // ══════════════════════════════════════════════════════════════════════════════
 
+await ensureInternalStubs()
 await rm(BUILD, { recursive: true, force: true })
 await mkdir(BUILD, { recursive: true })
 await cp(join(ROOT, 'src'), join(BUILD, 'src'), { recursive: true })
