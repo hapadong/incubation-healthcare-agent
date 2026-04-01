@@ -8,7 +8,7 @@
     "prepare-src": "node scripts/prepare-src.mjs",
     "build": "npm run prepare-src && node scripts/build.mjs",
     "check": "npm run prepare-src && tsc --noEmit",
-    "start": "node dist/cli.js"
+    "start": "node dist/cli.cjs"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -74,5 +74,8 @@
     "xss": "^1.0.15",
     "yaml": "^2.8.3",
     "zod": "^4.3.6"
+  },
+  "bin": {
+    "healthagent": "./dist/cli.cjs"
   }
 }
