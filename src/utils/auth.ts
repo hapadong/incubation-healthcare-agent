@@ -1565,11 +1565,7 @@ async function checkAndRefreshOAuthTokenIfNeededImpl(
 }
 
 export function isClaudeAISubscriber(): boolean {
-  if (!isAnthropicAuthEnabled()) {
-    return false
-  }
-
-  return shouldUseClaudeAIAuth(getClaudeAIOAuthTokens()?.scopes)
+  return false
 }
 
 /**
@@ -1581,9 +1577,7 @@ export function isClaudeAISubscriber(): boolean {
  * generate 403 storms against /api/oauth/profile, bootstrap, etc.
  */
 export function hasProfileScope(): boolean {
-  return (
-    getClaudeAIOAuthTokens()?.scopes?.includes(CLAUDE_AI_PROFILE_SCOPE) ?? false
-  )
+  return false
 }
 
 export function is1PApiCustomer(): boolean {

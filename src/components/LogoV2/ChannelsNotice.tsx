@@ -10,7 +10,6 @@ import { useState } from 'react';
 import { type ChannelEntry, getAllowedChannels, getHasDevChannels } from '../../bootstrap/state.js';
 import { Box, Text } from '../../ink.js';
 import { isChannelsEnabled } from '../../services/mcp/channelAllowlist.js';
-import { getEffectiveChannelAllowlist } from '../../services/mcp/channelNotification.js';
 import { getMcpConfigsByScope } from '../../services/mcp/config.js';
 import { getClaudeAIOAuthTokens, getSubscriptionType } from '../../utils/auth.js';
 import { loadInstalledPluginsV2 } from '../../utils/plugins/installedPluginsManager.js';
@@ -186,7 +185,7 @@ function _temp() {
   const sub = getSubscriptionType();
   const managed = sub === "team" || sub === "enterprise";
   const policy = getSettingsForSource("policySettings");
-  const allowlist = getEffectiveChannelAllowlist(sub, policy?.allowedChannelPlugins);
+  const allowlist = { entries: [] as Array<{ plugin: string; marketplace: string }>, source: 'ledger' as const };
   return {
     channels: ch,
     disabled: !isChannelsEnabled(),
@@ -203,7 +202,7 @@ type Unmatched = {
   entry: ChannelEntry;
   why: string;
 };
-function findUnmatched(entries: readonly ChannelEntry[], allowlist: ReturnType<typeof getEffectiveChannelAllowlist>): Unmatched[] {
+function findUnmatched(entries: readonly ChannelEntry[], allowlist: { entries: Array<{ plugin: string; marketplace: string }>; source: string }): Unmatched[] {
   // Server-kind: build one Set from all scopes up front. getMcpConfigsByScope
   // is not cached (project scope walks the dir tree); getMcpConfigByName would
   // redo that walk per entry.

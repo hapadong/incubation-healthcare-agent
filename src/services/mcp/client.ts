@@ -131,7 +131,6 @@ import {
   hasMcpDiscoveryButNoToken,
   wrapFetchWithStepUpDetection,
 } from './auth.js'
-import { markClaudeAiMcpConnected } from './claudeai.js'
 import { getAllMcpConfigs, isMcpServerDisabled } from './config.js'
 import { getMcpServerHeaders } from './headersHelper.js'
 import { SdkControlClientTransport } from './SdkControlTransport.js'
@@ -2162,10 +2161,6 @@ export async function reconnectMcpServerImpl(
       }
     }
 
-    if (config.type === 'claudeai-proxy') {
-      markClaudeAiMcpConnected(name)
-    }
-
     const supportsResources = !!client.capabilities?.resources
 
     const [tools, mcpCommands, mcpSkills, resources] = await Promise.all([
@@ -2333,10 +2328,6 @@ export async function getMcpToolsCommandsAndResources(
           commands: [],
         })
         return
-      }
-
-      if (config.type === 'claudeai-proxy') {
-        markClaudeAiMcpConnected(name)
       }
 
       const supportsResources = !!client.capabilities?.resources

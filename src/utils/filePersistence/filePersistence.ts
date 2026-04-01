@@ -8,31 +8,23 @@
  */
 
 import { feature } from '../../stubs/bun-bundle.js'
-import { join, relative } from 'path'
+import { join } from 'path'
 import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   logEvent,
 } from '../../services/analytics/index.js'
-import {
-  type FilesApiConfig,
-  uploadSessionFiles,
-} from '../../services/api/filesApi.js'
 import { getCwd } from '../cwd.js'
 import { errorMessage } from '../errors.js'
 import { logError } from '../log.js'
 import { getSessionIngressAuthToken } from '../sessionIngressAuth.js'
 import {
-  findModifiedFiles,
   getEnvironmentKind,
   logDebug,
 } from './outputsScanner.js'
 import {
-  DEFAULT_UPLOAD_CONCURRENCY,
   type FailedPersistence,
-  FILE_COUNT_LIMIT,
   type FilesPersistedEventData,
   OUTPUTS_SUBDIR,
-  type PersistedFile,
   type TurnStartTime,
 } from './types.js'
 
@@ -72,11 +64,6 @@ export async function runFilePersistence(
     return null
   }
 
-  const config: FilesApiConfig = {
-    oauthToken: sessionAccessToken,
-    sessionId,
-  }
-
   const outputsDir = join(getCwd(), sessionId, OUTPUTS_SUBDIR)
 
   // Check if aborted
@@ -95,7 +82,6 @@ export async function runFilePersistence(
     if (environmentKind === 'byoc') {
       result = await executeBYOCPersistence(
         turnStartTime,
-        config,
         outputsDir,
         signal,
       )
@@ -144,99 +130,14 @@ export async function runFilePersistence(
 }
 
 /**
- * Execute BYOC mode persistence: scan local filesystem for modified files,
- * then upload to Files API.
+ * Execute BYOC mode persistence: stubbed — file upload removed.
  */
 async function executeBYOCPersistence(
-  turnStartTime: TurnStartTime,
-  config: FilesApiConfig,
-  outputsDir: string,
-  signal?: AbortSignal,
+  _turnStartTime: TurnStartTime,
+  _outputsDir: string,
+  _signal?: AbortSignal,
 ): Promise<FilesPersistedEventData> {
-  // Find modified files via local filesystem scan
-  // Uses same directory structure as downloads: {cwd}/{sessionId}/outputs
-  const modifiedFiles = await findModifiedFiles(turnStartTime, outputsDir)
-
-  if (modifiedFiles.length === 0) {
-    logDebug('No modified files to persist')
-    return { files: [], failed: [] }
-  }
-
-  logDebug(`Found ${modifiedFiles.length} modified files`)
-
-  if (signal?.aborted) {
-    return { files: [], failed: [] }
-  }
-
-  // Enforce file count limit
-  if (modifiedFiles.length > FILE_COUNT_LIMIT) {
-    logDebug(
-      `File count limit exceeded: ${modifiedFiles.length} > ${FILE_COUNT_LIMIT}`,
-    )
-    logEvent('tengu_file_persistence_limit_exceeded', {
-      file_count: modifiedFiles.length,
-      limit: FILE_COUNT_LIMIT,
-    })
-    return {
-      files: [],
-      failed: [
-        {
-          filename: outputsDir,
-          error: `Too many files modified (${modifiedFiles.length}). Maximum: ${FILE_COUNT_LIMIT}.`,
-        },
-      ],
-    }
-  }
-
-  const filesToProcess = modifiedFiles
-    .map(filePath => ({
-      path: filePath,
-      relativePath: relative(outputsDir, filePath),
-    }))
-    .filter(({ relativePath }) => {
-      // Security: skip files that resolve outside the outputs directory
-      if (relativePath.startsWith('..')) {
-        logDebug(`Skipping file outside outputs directory: ${relativePath}`)
-        return false
-      }
-      return true
-    })
-
-  logDebug(`BYOC mode: uploading ${filesToProcess.length} files`)
-
-  // Upload files in parallel
-  const results = await uploadSessionFiles(
-    filesToProcess,
-    config,
-    DEFAULT_UPLOAD_CONCURRENCY,
-  )
-
-  // Separate successful and failed uploads
-  const persistedFiles: PersistedFile[] = []
-  const failedFiles: FailedPersistence[] = []
-
-  for (const result of results) {
-    if (result.success) {
-      persistedFiles.push({
-        filename: result.path,
-        file_id: result.fileId,
-      })
-    } else {
-      failedFiles.push({
-        filename: result.path,
-        error: result.error,
-      })
-    }
-  }
-
-  logDebug(
-    `BYOC persistence complete: ${persistedFiles.length} uploaded, ${failedFiles.length} failed`,
-  )
-
-  return {
-    files: persistedFiles,
-    failed: failedFiles,
-  }
+  return { files: [], failed: [] }
 }
 
 /**
