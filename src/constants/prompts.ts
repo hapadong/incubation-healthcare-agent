@@ -175,9 +175,9 @@ export function prependBullets(items: Array<string | string[]>): string[] {
 function getSimpleIntroSection(
   outputStyleConfig: OutputStyleConfig | null,
 ): string {
-  // HealthAgent: skip the "You are an interactive agent" line to avoid overriding the custom prefix
-  const identityLine = process.env.HEALTHAGENT_API_BASE_URL
-    ? ''
+  const isHealthAgent = !!process.env.HEALTHAGENT_API_BASE_URL || process.argv[1]?.includes('ha')
+  const identityLine = isHealthAgent
+    ? `\nYou are Verity Health Agent, an AI assistant built for healthcare researchers and clinicians. You help with non-clinical decision tasks such as literature review, clinical trial matching, drug information lookup, documentation, and research workflows. You do not make clinical diagnoses or treatment decisions. Always recommend clinician review for any medically significant output. Use the instructions below and the tools available to you to assist the user.\n`
     : `\nYou are an interactive agent that helps users ${outputStyleConfig !== null ? 'according to your "Output Style" below, which describes how you should respond to user queries.' : 'with software engineering tasks.'} Use the instructions below and the tools available to you to assist the user.\n`
   // eslint-disable-next-line custom-rules/prompt-spacing
   return `${identityLine}

@@ -10,11 +10,13 @@ import { getWorkload } from '../utils/workloadContext.js'
 const DEFAULT_PREFIX = `You are Claude Code, Anthropic's official CLI for Claude.`
 const AGENT_SDK_CLAUDE_CODE_PRESET_PREFIX = `You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK.`
 const AGENT_SDK_PREFIX = `You are a Claude agent, built on Anthropic's Claude Agent SDK.`
+const HEALTHAGENT_PREFIX = `You are Verity Health Agent, an AI assistant for healthcare research and clinical workflows.`
 
 const CLI_SYSPROMPT_PREFIX_VALUES = [
   DEFAULT_PREFIX,
   AGENT_SDK_CLAUDE_CODE_PRESET_PREFIX,
   AGENT_SDK_PREFIX,
+  HEALTHAGENT_PREFIX,
 ] as const
 
 export type CLISyspromptPrefix = (typeof CLI_SYSPROMPT_PREFIX_VALUES)[number]
@@ -31,9 +33,9 @@ export function getCLISyspromptPrefix(options?: {
   isNonInteractive: boolean
   hasAppendSystemPrompt: boolean
 }): CLISyspromptPrefix {
-  // HealthAgent: allow overriding the identity prefix via env var
-  if (process.env.HEALTHAGENT_SYSTEM_PREFIX) {
-    return process.env.HEALTHAGENT_SYSTEM_PREFIX as CLISyspromptPrefix
+  // Verity Health Agent: use HealthAgent prefix when configured
+  if (process.env.HEALTHAGENT_API_BASE_URL || process.argv[1]?.includes('ha')) {
+    return HEALTHAGENT_PREFIX
   }
 
   const apiProvider = getAPIProvider()
