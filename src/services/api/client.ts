@@ -17,14 +17,102 @@ import OpenAI, { AzureOpenAI } from 'openai'
 //   HEALTHAGENT_AZURE_API_VERSION  — default: 2025-01-01-preview
 //   HEALTHAGENT_AZURE_DEPLOYMENT   — deployment name if different from model
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function safeJsonParse(s: string): unknown {
+  try { return JSON.parse(s) } catch { return {} }
+}
+
+/** Convert Anthropic tool definitions → OpenAI function tool format */
+function anthropicToolsToOpenAI(
+  tools: Array<Record<string, unknown>>,
+): OpenAI.Chat.ChatCompletionTool[] {
+  return tools.map(t => ({
+    type: 'function' as const,
+    function: {
+      name: t.name as string,
+      description: (t.description as string) ?? '',
+      parameters: (t.input_schema as Record<string, unknown>) ?? { type: 'object', properties: {} },
+    },
+  }))
+}
+
+/**
+ * Convert a single Anthropic message → one or more OpenAI messages.
+ * Handles text, tool_use (assistant), and tool_result (user) content blocks.
+ */
+function anthropicMessageToOpenAI(
+  msg: { role: string; content: unknown },
+): OpenAI.Chat.ChatCompletionMessageParam[] {
+  const { role, content } = msg
+
+  if (typeof content === 'string') {
+    return [{ role: role as 'user' | 'assistant' | 'system', content }]
+  }
+
+  if (!Array.isArray(content)) {
+    return [{ role: role as 'user' | 'assistant' | 'system', content: String(content) }]
+  }
+
+  const blocks = content as Array<Record<string, unknown>>
+
+  if (role === 'assistant') {
+    const textParts: string[] = []
+    const toolCalls: OpenAI.Chat.ChatCompletionMessageToolCall[] = []
+    for (const b of blocks) {
+      if (b.type === 'text') textParts.push(b.text as string)
+      if (b.type === 'tool_use') {
+        toolCalls.push({
+          id: b.id as string,
+          type: 'function',
+          function: {
+            name: b.name as string,
+            arguments: typeof b.input === 'string' ? b.input : JSON.stringify(b.input ?? {}),
+          },
+        })
+      }
+    }
+    const out: OpenAI.Chat.ChatCompletionAssistantMessageParam = {
+      role: 'assistant',
+      content: textParts.join('\n') || null,
+    }
+    if (toolCalls.length) out.tool_calls = toolCalls
+    return [out]
+  }
+
+  if (role === 'user') {
+    const result: OpenAI.Chat.ChatCompletionMessageParam[] = []
+    const textParts: string[] = []
+    for (const b of blocks) {
+      if (b.type === 'text') {
+        textParts.push(b.text as string)
+      } else if (b.type === 'tool_result') {
+        if (textParts.length) {
+          result.push({ role: 'user', content: textParts.splice(0).join('\n') })
+        }
+        const tc = b.content
+        const toolContent = typeof tc === 'string' ? tc
+          : Array.isArray(tc)
+            ? (tc as Array<Record<string, unknown>>).filter(x => x.type === 'text').map(x => x.text as string).join('\n')
+            : String(tc ?? '')
+        result.push({ role: 'tool', tool_call_id: b.tool_use_id as string, content: toolContent })
+      }
+    }
+    if (textParts.length) result.push({ role: 'user', content: textParts.join('\n') })
+    return result.length ? result : [{ role: 'user', content: '' }]
+  }
+
+  // Fallback
+  const text = blocks.filter(b => b.type === 'text').map(b => b.text as string).join('\n')
+  return [{ role: role as 'user' | 'assistant', content: text }]
+}
+
 function buildOpenAIAdapter(): Anthropic | null {
   const baseURL = process.env.HEALTHAGENT_API_BASE_URL
   if (!baseURL) return null
 
   const apiKey = process.env.HEALTHAGENT_API_KEY ?? 'not-required'
   const isAzure = baseURL.includes('.openai.azure.com')
-  // The Azure OpenAI /v1 compatibility endpoint works with the plain OpenAI SDK.
-  // Strip any trailing /openai/v1 or /v1 for AzureOpenAI SDK (which builds its own path).
   const azureEndpoint = baseURL.replace(/\/openai\/v1\/?$/, '').replace(/\/v1\/?$/, '')
   const isV1Compat = isAzure && baseURL !== azureEndpoint
   const apiVersion = process.env.HEALTHAGENT_AZURE_API_VERSION ?? '2025-01-01-preview'
@@ -39,106 +127,71 @@ function buildOpenAIAdapter(): Anthropic | null {
     : new OpenAI({
         baseURL,
         apiKey,
-        // Azure v1-compat endpoint (/openai/v1) uses api-key header but NOT api-version
-        ...(isAzure ? {
-          defaultHeaders: { 'api-key': apiKey },
-        } : {}),
+        ...(isAzure ? { defaultHeaders: { 'api-key': apiKey } } : {}),
       })
 
-  // Build a fake HTTP Response object for rate-limit header extraction
   const makeFakeResponse = () => new Response(null, {
     status: 200,
     headers: new Headers({ 'request-id': '' }),
   })
 
-  // Core message call: returns the data (stream or non-stream)
   const callMessages = async (params: Record<string, unknown>): Promise<unknown> => {
-    // Always use HEALTHAGENT_MODEL when set — Claude Code passes its own model IDs
-    // (e.g. claude-opus-4-5) which don't exist on Azure/OpenAI endpoints.
     const model = process.env.HEALTHAGENT_MODEL
       ?? (params.model as string | undefined)
       ?? 'gpt-4o'
 
-    // Convert Anthropic message format to OpenAI format
+    // Build messages: system prompt + conversation history with tool_use/tool_result
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = []
-
-    // Anthropic uses a top-level 'system' field; OpenAI uses a system message
     if (params.system) {
-      const systemContent = typeof params.system === 'string'
+      const sys = typeof params.system === 'string'
         ? params.system
         : Array.isArray(params.system)
-          ? (params.system as Array<{type: string, text: string}>)
-              .filter(b => b.type === 'text')
-              .map(b => b.text)
-              .join('\n')
+          ? (params.system as Array<{type: string; text: string}>).filter(b => b.type === 'text').map(b => b.text).join('\n')
           : String(params.system)
-      messages.push({ role: 'system', content: systemContent })
+      messages.push({ role: 'system', content: sys })
+    }
+    for (const msg of (params.messages as Array<{role: string; content: unknown}> ?? [])) {
+      messages.push(...anthropicMessageToOpenAI(msg))
     }
 
-    // Convert content blocks to plain strings for OpenAI
-    for (const msg of (params.messages as Array<{role: string, content: unknown}> ?? [])) {
-      const content = typeof msg.content === 'string'
-        ? msg.content
-        : Array.isArray(msg.content)
-          ? (msg.content as Array<Record<string, unknown>>)
-              .filter((b) => b.type === 'text')
-              .map((b) => b.text as string)
-              .join('\n')
-          : String(msg.content)
-      messages.push({ role: msg.role as 'user' | 'assistant', content })
-    }
+    // Convert Anthropic tool definitions → OpenAI function format
+    const rawTools = params.tools as Array<Record<string, unknown>> | undefined
+    const tools = rawTools?.length ? anthropicToolsToOpenAI(rawTools) : undefined
 
-    // Cap at 16384 — Azure gpt-4o deployment limit; Claude Code requests up to 32000
     const maxTokens = Math.min((params.max_tokens as number | undefined) ?? 4096, 16384)
 
     if (params.stream === true) {
       const stream = await openai.chat.completions.create({
-        model,
-        messages,
-        max_tokens: maxTokens,
-        stream: true,
+        model, messages, max_tokens: maxTokens, stream: true,
+        ...(tools ? { tools } : {}),
       })
       return openaiStreamToAnthropicStream(stream, model)
     }
 
     const response = await openai.chat.completions.create({
-      model,
-      messages,
-      max_tokens: maxTokens,
-      stream: false,
+      model, messages, max_tokens: maxTokens, stream: false,
+      ...(tools ? { tools } : {}),
     })
     return openaiResponseToAnthropic(response, model)
   }
 
-  // Adapter: wraps OpenAI client to match Anthropic SDK interface.
-  // The codebase calls either:
-  //   anthropic.beta.messages.create(params).withResponse()  → { data, response, request_id }
-  //   await anthropic.beta.messages.create(params)           → data directly
   const makeAPIPromise = (params: Record<string, unknown>) => {
-    // Build a thenable that also has .withResponse()
     const dataPromise = callMessages(params)
-    const apiPromise: Promise<unknown> & { withResponse: () => Promise<{data: unknown, response: Response, request_id: string}> } = Object.assign(
+    const apiPromise: Promise<unknown> & { withResponse: () => Promise<{data: unknown; response: Response; request_id: string}> } = Object.assign(
       dataPromise,
       {
         withResponse: async () => {
           const data = await dataPromise
           return { data, response: makeFakeResponse(), request_id: '' }
         },
-      }
+      },
     )
     return apiPromise
   }
 
   const adapter = {
-    beta: {
-      messages: {
-        create: (params: Record<string, unknown>) => makeAPIPromise(params),
-      },
-    },
-    // Passthrough for non-message operations (auth check, etc.)
-    messages: {
-      create: (params: Record<string, unknown>) => makeAPIPromise(params),
-    },
+    beta: { messages: { create: (params: Record<string, unknown>) => makeAPIPromise(params) } },
+    messages: { create: (params: Record<string, unknown>) => makeAPIPromise(params) },
     apiKey,
     baseURL,
   }
@@ -146,18 +199,38 @@ function buildOpenAIAdapter(): Anthropic | null {
   return adapter as unknown as Anthropic
 }
 
+/** Convert OpenAI non-streaming response → Anthropic message format */
 function openaiResponseToAnthropic(
   response: OpenAI.Chat.ChatCompletion,
   model: string,
 ): Record<string, unknown> {
   const choice = response.choices[0]
+  const message = choice?.message
+  const content: Array<Record<string, unknown>> = []
+
+  if (message?.content) {
+    content.push({ type: 'text', text: message.content })
+  }
+  for (const tc of message?.tool_calls ?? []) {
+    content.push({
+      type: 'tool_use',
+      id: tc.id,
+      name: tc.function.name,
+      input: safeJsonParse(tc.function.arguments),
+    })
+  }
+
+  const stopReason = choice?.finish_reason === 'tool_calls' ? 'tool_use'
+    : choice?.finish_reason === 'stop' ? 'end_turn'
+    : 'max_tokens'
+
   return {
     id: response.id,
     type: 'message',
     role: 'assistant',
     model,
-    content: [{ type: 'text', text: choice?.message?.content ?? '' }],
-    stop_reason: choice?.finish_reason === 'stop' ? 'end_turn' : 'max_tokens',
+    content,
+    stop_reason: stopReason,
     stop_sequence: null,
     usage: {
       input_tokens: response.usage?.prompt_tokens ?? 0,
@@ -166,23 +239,59 @@ function openaiResponseToAnthropic(
   }
 }
 
+/** Convert OpenAI streaming response → Anthropic SSE event stream */
 async function* openaiStreamToAnthropicStream(
   stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>,
   model: string,
 ): AsyncGenerator<Record<string, unknown>> {
   const id = `msg_${randomUUID().replace(/-/g, '')}`
   yield { type: 'message_start', message: { id, type: 'message', role: 'assistant', model, content: [], stop_reason: null, usage: { input_tokens: 0, output_tokens: 0 } } }
-  yield { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }
   yield { type: 'ping' }
 
+  let textBlockIndex = -1
+  // tool call index → { blockIndex, argsBuf }
+  const toolBlocks = new Map<number, { blockIndex: number; argsBuf: string }>()
+  let nextBlockIndex = 0
+
   for await (const chunk of stream) {
-    const delta = chunk.choices[0]?.delta?.content
-    if (delta) {
-      yield { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: delta } }
+    const choice = chunk.choices[0]
+    if (!choice) continue
+    const delta = choice.delta
+
+    // Text delta
+    if (delta?.content) {
+      if (textBlockIndex === -1) {
+        textBlockIndex = nextBlockIndex++
+        yield { type: 'content_block_start', index: textBlockIndex, content_block: { type: 'text', text: '' } }
+      }
+      yield { type: 'content_block_delta', index: textBlockIndex, delta: { type: 'text_delta', text: delta.content } }
     }
-    if (chunk.choices[0]?.finish_reason) {
-      yield { type: 'content_block_stop', index: 0 }
-      yield { type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 0 } }
+
+    // Tool call deltas
+    for (const tc of delta?.tool_calls ?? []) {
+      const tcIdx = tc.index ?? 0
+      if (!toolBlocks.has(tcIdx)) {
+        const blockIndex = nextBlockIndex++
+        toolBlocks.set(tcIdx, { blockIndex, argsBuf: '' })
+        yield { type: 'content_block_start', index: blockIndex, content_block: { type: 'tool_use', id: tc.id ?? `call_${tcIdx}`, name: tc.function?.name ?? '', input: {} } }
+      }
+      const block = toolBlocks.get(tcIdx)!
+      if (tc.function?.arguments) {
+        block.argsBuf += tc.function.arguments
+        yield { type: 'content_block_delta', index: block.blockIndex, delta: { type: 'input_json_delta', partial_json: tc.function.arguments } }
+      }
+    }
+
+    // Finish
+    if (choice.finish_reason) {
+      if (textBlockIndex !== -1) yield { type: 'content_block_stop', index: textBlockIndex }
+      for (const { blockIndex } of toolBlocks.values()) yield { type: 'content_block_stop', index: blockIndex }
+
+      const stopReason = choice.finish_reason === 'tool_calls' ? 'tool_use'
+        : choice.finish_reason === 'stop' ? 'end_turn'
+        : 'max_tokens'
+
+      yield { type: 'message_delta', delta: { stop_reason: stopReason, stop_sequence: null }, usage: { output_tokens: 0 } }
       yield { type: 'message_stop' }
     }
   }
