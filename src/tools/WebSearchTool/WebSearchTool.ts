@@ -305,6 +305,10 @@ export const WebSearchTool = buildTool({
     return input.query
   },
   async checkPermissions(_input): Promise<PermissionResult> {
+    // HealthAgent: auto-allow when search key is configured — user opted in explicitly
+    if (process.env.HEALTHAGENT_SEARCH_API_KEY) {
+      return { behavior: 'allow' }
+    }
     return {
       behavior: 'passthrough',
       message: 'WebSearchTool requires permission.',
