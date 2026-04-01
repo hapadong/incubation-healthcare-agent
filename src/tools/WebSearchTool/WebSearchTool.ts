@@ -73,6 +73,67 @@ export type { WebSearchProgress } from '../../types/tools.js'
 
 import type { WebSearchProgress } from '../../types/tools.js'
 
+// ── HealthAgent: direct search via Brave or Tavily ──────────────────────────
+async function callWithConfiguredSearch(
+  input: Input,
+  startTime: number,
+): Promise<{ data: Output }> {
+  const { query, allowed_domains, blocked_domains } = input
+  const provider = process.env.HEALTHAGENT_SEARCH_PROVIDER ?? 'brave'
+  const apiKey = process.env.HEALTHAGENT_SEARCH_API_KEY!
+
+  let hits: { title: string; url: string }[] = []
+
+  if (provider === 'tavily') {
+    const res = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query,
+        max_results: 10,
+        include_domains: allowed_domains ?? [],
+        exclude_domains: blocked_domains ?? [],
+      }),
+    })
+    const data = await res.json() as { results: { title: string; url: string }[] }
+    hits = (data.results ?? []).map(r => ({ title: r.title, url: r.url }))
+  } else {
+    // Brave (default)
+    const params = new URLSearchParams({ q: query, count: '10' })
+    const res = await fetch(
+      `https://api.search.brave.com/res/v1/web/search?${params}`,
+      {
+        headers: {
+          'X-Subscription-Token': apiKey,
+          Accept: 'application/json',
+        },
+      },
+    )
+    const data = await res.json() as {
+      web?: { results: { title: string; url: string }[] }
+    }
+    hits = (data.web?.results ?? []).map(r => ({ title: r.title, url: r.url }))
+
+    // Apply domain filters client-side (Brave doesn't support server-side)
+    if (allowed_domains?.length) {
+      hits = hits.filter(h => allowed_domains.some(d => h.url.includes(d)))
+    }
+    if (blocked_domains?.length) {
+      hits = hits.filter(h => !blocked_domains.some(d => h.url.includes(d)))
+    }
+  }
+
+  return {
+    data: {
+      query,
+      results: [{ tool_use_id: 'ha-search-1', content: hits }],
+      durationSeconds: (performance.now() - startTime) / 1000,
+    },
+  }
+}
+// ── end HealthAgent search ───────────────────────────────────────────────────
+
 function makeToolSchema(input: Input): BetaWebSearchTool20250305 {
   return {
     type: 'web_search_20250305',
@@ -166,6 +227,11 @@ export const WebSearchTool = buildTool({
     return summary ? `Searching for ${summary}` : 'Searching the web'
   },
   isEnabled() {
+    // HealthAgent: enable when a search API key is configured
+    if (process.env.HEALTHAGENT_SEARCH_API_KEY) {
+      return true
+    }
+
     const provider = getAPIProvider()
     const model = getMainLoopModel()
 
@@ -253,6 +319,12 @@ export const WebSearchTool = buildTool({
   },
   async call(input, context, _canUseTool, _parentMessage, onProgress) {
     const startTime = performance.now()
+
+    // HealthAgent: use configured search provider (Brave or Tavily)
+    if (process.env.HEALTHAGENT_SEARCH_API_KEY) {
+      return callWithConfiguredSearch(input, startTime)
+    }
+
     const { query } = input
     const userMessage = createUserMessage({
       content: 'Perform a web search for the query: ' + query,
