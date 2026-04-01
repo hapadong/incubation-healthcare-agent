@@ -332,6 +332,9 @@ export function isOpus1mMergeEnabled(): boolean {
 }
 
 export function renderModelSetting(setting: ModelName | ModelAlias): string {
+  if (process.env.HEALTHAGENT_API_BASE_URL) {
+    return process.env.HEALTHAGENT_MODEL ?? 'gpt-4o'
+  }
   if (setting === 'opusplan') {
     return 'Opus Plan'
   }
