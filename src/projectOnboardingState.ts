@@ -32,7 +32,7 @@ export function getSteps(): Step[] {
     },
     {
       key: 'claudemd',
-      text: 'Run /init to create a CLAUDE.md file with instructions for Claude',
+      text: (process.env.HEALTHAGENT_API_BASE_URL || process.argv[1]?.includes('ha')) ? 'Run /init to create a CLAUDE.md file with project instructions' : 'Run /init to create a CLAUDE.md file with instructions for Claude',
       isComplete: hasClaudeMd,
       isCompletable: true,
       isEnabled: !isWorkspaceDirEmpty,

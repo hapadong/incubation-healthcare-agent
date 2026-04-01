@@ -241,11 +241,13 @@ export function formatReleaseNoteForDisplay(
  */
 export function getLogoDisplayData(): {
   version: string
+  appName: string
   cwd: string
   billingType: string
   agentName: string | undefined
 } {
-  const isHealthAgent = !!process.env.HEALTHAGENT_API_BASE_URL
+  const isHealthAgent = !!process.env.HEALTHAGENT_API_BASE_URL || process.argv[1]?.includes('ha')
+  const appName = isHealthAgent ? 'Verity Health Agent' : 'Claude Code'
   const version = isHealthAgent
     ? (process.env.HEALTHAGENT_VERSION ?? '0.1.0')
     : (process.env.DEMO_VERSION ?? '2.1.88')
@@ -265,6 +267,7 @@ export function getLogoDisplayData(): {
 
   return {
     version,
+    appName,
     cwd,
     billingType,
     agentName,

@@ -78,6 +78,6 @@
     "zod": "^4.3.6"
   },
   "bin": {
-    "healthagent": "./dist/cli.cjs"
+    "ha": "./dist/cli.cjs"
   }
 }
