@@ -19,7 +19,7 @@
  */
 
 import { readdir, readFile, writeFile, mkdir, cp, rm, stat } from 'node:fs/promises'
-import { join, dirname } from 'node:path'
+import { join, dirname, resolve } from 'node:path'
 import { execSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -56,7 +56,10 @@ async function ensureEsbuild() {
 await rm(BUILD, { recursive: true, force: true })
 await mkdir(BUILD, { recursive: true })
 await cp(join(ROOT, 'src'), join(BUILD, 'src'), { recursive: true })
-console.log('✅ Phase 1: Copied src/ → build-src/')
+// Also copy stubs/ so that relative imports like '../stubs/bun-bundle.js'
+// from build-src/src/ can be resolved at build-src/stubs/
+await cp(join(ROOT, 'stubs'), join(BUILD, 'stubs'), { recursive: true })
+console.log('✅ Phase 1: Copied src/ → build-src/ and stubs/ → build-src/stubs/')
 
 // ══════════════════════════════════════════════════════════════════════════════
 // PHASE 2: Transform source
@@ -120,8 +123,7 @@ console.log(`✅ Phase 2: Transformed ${transformCount} files`)
 // PHASE 3: Create entry wrapper
 // ══════════════════════════════════════════════════════════════════════════════
 
-await writeFile(ENTRY, `#!/usr/bin/env node
-// Claude Code v${VERSION} — built from source
+await writeFile(ENTRY, `// Claude Code v${VERSION} — built from source
 // Copyright (c) Anthropic PBC. All rights reserved.
 import './src/entrypoints/cli.tsx'
 `, 'utf8')
@@ -138,7 +140,7 @@ await mkdir(OUT_DIR, { recursive: true })
 const OUT_FILE = join(OUT_DIR, 'cli.js')
 
 // Run up to 5 rounds of: esbuild → collect missing → create stubs → retry
-const MAX_ROUNDS = 5
+const MAX_ROUNDS = 15
 let succeeded = false
 
 for (let round = 1; round <= MAX_ROUNDS; round++) {
@@ -152,11 +154,15 @@ for (let round = 1; round <= MAX_ROUNDS; round++) {
       '--bundle',
       '--platform=node',
       '--target=node18',
-      '--format=esm',
+      '--format=cjs',
       `--outfile="${OUT_FILE}"`,
       `--banner:js=$'#!/usr/bin/env node\\n// Claude Code v${VERSION} (built from source)\\n// Copyright (c) Anthropic PBC. All rights reserved.\\n'`,
       '--packages=external',
       '--external:bun:*',
+      '--loader:.md=text',
+      '--loader:.txt=text',
+      // Resolve the 'src/*' path alias to build-src/src/* (tsconfig paths)
+      `--alias:src=${join(BUILD, 'src')}`,
       '--allow-overwrite',
       '--log-level=error',
       '--log-limit=0',
@@ -172,18 +178,51 @@ for (let round = 1; round <= MAX_ROUNDS; round++) {
     esbuildOutput = (e.stderr?.toString() || '') + (e.stdout?.toString() || '')
   }
 
-  // Parse missing modules
-  const missingRe = /Could not resolve "([^"]+)"/g
-  const missing = new Set()
-  let m
-  while ((m = missingRe.exec(esbuildOutput)) !== null) {
-    const mod = m[1]
-    if (!mod.startsWith('node:') && !mod.startsWith('bun:') && !mod.startsWith('/')) {
-      missing.add(mod)
+  // Parse missing modules with their importer context
+  // esbuild error format:
+  //   ✘ [ERROR] Could not resolve "./foo.js"
+  //   ✘ [ERROR] Could not resolve "/abs/path.js" (originally "src/foo.js")
+  //   ✘ [ERROR] No matching export in "build-src/src/foo.js" for import "bar"
+  const missingAbsPaths = new Set()
+  const missingWithImporters = []
+  // Map from absolute file path → Set of export names needed
+  const missingExports = new Map()
+  const errorBlocks = esbuildOutput.split(/\n(?=✘ \[ERROR\])/)
+  for (const block of errorBlocks) {
+    // Handle "No matching export" errors
+    const exportMatch = block.match(/No matching export in "([^"]+)" for import "([^"]+)"/)
+    if (exportMatch) {
+      const filePath = exportMatch[1]
+      const exportName = exportMatch[2]
+      // Only handle files in build-src/
+      if (filePath.startsWith('build-src/') || filePath.startsWith(BUILD)) {
+        const absPath = filePath.startsWith('/') ? filePath : resolve(ROOT, filePath)
+        if (!missingExports.has(absPath)) missingExports.set(absPath, new Set())
+        missingExports.get(absPath).add(exportName)
+      }
+      continue
     }
+
+    const resolveMatch = block.match(/Could not resolve "([^"]+)"/)
+    if (!resolveMatch) continue
+    const mod = resolveMatch[1]
+    if (mod.startsWith('node:') || mod.startsWith('bun:')) continue
+
+    // Handle absolute paths (from --alias resolution)
+    if (mod.startsWith('/')) {
+      if (!await exists(mod)) missingAbsPaths.add(mod)
+      continue
+    }
+
+    // Extract importer path (first indented file path after the error line)
+    const importerMatch = block.match(/\n\s+((?:build-src|src)[^\s:]+):\d+:\d+:/)
+    const importer = importerMatch ? importerMatch[1] : null
+    missingWithImporters.push({ mod, importer })
   }
 
-  if (missing.size === 0) {
+  const missing = new Set(missingWithImporters.map(x => x.mod))
+
+  if (missing.size === 0 && missingAbsPaths.size === 0 && missingExports.size === 0) {
     // No more missing modules but still errors — check what
     const errLines = esbuildOutput.split('\n').filter(l => l.includes('ERROR')).slice(0, 5)
     console.log('❌ Unrecoverable errors:')
@@ -191,41 +230,89 @@ for (let round = 1; round <= MAX_ROUNDS; round++) {
     break
   }
 
-  console.log(`   Found ${missing.size} missing modules, creating stubs...`)
+  console.log(`   Found ${missing.size + missingAbsPaths.size} missing modules, ${missingExports.size} stubs needing exports, creating stubs...`)
 
   // Create stubs
   let stubCount = 0
-  for (const mod of missing) {
-    // Resolve relative path from the file that imports it — but since we
-    // don't have that info easily, create stubs at multiple likely locations
-    const cleanMod = mod.replace(/^\.\//, '')
 
-    // Text assets → empty file
-    if (/\.(txt|md|json)$/.test(cleanMod)) {
-      const p = join(BUILD, 'src', cleanMod)
-      await mkdir(dirname(p), { recursive: true }).catch(() => {})
-      if (!await exists(p)) {
-        await writeFile(p, cleanMod.endsWith('.json') ? '{}' : '', 'utf8')
-        stubCount++
+  // Handle absolute paths first (from --alias src= resolution)
+  for (const absPath of missingAbsPaths) {
+    const isText = /\.(txt|md)$/.test(absPath)
+    await mkdir(dirname(absPath), { recursive: true }).catch(() => {})
+    if (!await exists(absPath)) {
+      if (isText) {
+        await writeFile(absPath, '', 'utf8')
+      } else {
+        await writeFile(absPath, `// Auto-generated stub\nexport default {}\nexport const __stub = true\n`, 'utf8')
       }
+      stubCount++
+    }
+  }
+
+  for (const { mod, importer } of missingWithImporters) {
+    const isText = /\.(txt|md)$/.test(mod)
+    const isCode = /\.[tj]sx?$/.test(mod) || mod.endsWith('.js')
+
+    // Determine absolute stub paths to create
+    const stubPaths = []
+
+    if (mod.startsWith('./') || mod.startsWith('../')) {
+      // Relative import — resolve relative to importer if known
+      if (importer) {
+        const importerAbs = resolve(ROOT, importer)
+        const resolved = resolve(dirname(importerAbs), mod)
+        stubPaths.push(resolved)
+      } else {
+        // Fallback: try from build-src/src
+        stubPaths.push(resolve(BUILD, 'src', mod))
+      }
+    } else {
+      // Bare module — skip (handled by --packages=external)
       continue
     }
 
-    // JS/TS modules → export empty
-    if (/\.[tj]sx?$/.test(cleanMod)) {
-      for (const base of [join(BUILD, 'src'), join(BUILD, 'src', 'src')]) {
-        const p = join(base, cleanMod)
-        await mkdir(dirname(p), { recursive: true }).catch(() => {})
-        if (!await exists(p)) {
-          const name = cleanMod.split('/').pop().replace(/\.[tj]sx?$/, '')
-          const safeName = name.replace(/[^a-zA-Z0-9_$]/g, '_') || 'stub'
-          await writeFile(p, `// Auto-generated stub\nexport default function ${safeName}() {}\nexport const ${safeName} = () => {}\n`, 'utf8')
-          stubCount++
+    for (const p of stubPaths) {
+      await mkdir(dirname(p), { recursive: true }).catch(() => {})
+      if (!await exists(p)) {
+        if (isText) {
+          await writeFile(p, '', 'utf8')
+        } else if (isCode) {
+          await writeFile(p, `// Auto-generated stub\nexport default {}\nexport const __stub = true\n`, 'utf8')
         }
+        stubCount++
       }
     }
   }
-  console.log(`   Created ${stubCount} stubs`)
+  // Fix stubs with missing named exports
+  for (const [absPath, exportNames] of missingExports) {
+    try {
+      let content = await readFile(absPath, 'utf8').catch(() => '// Auto-generated stub\nexport default {}\nexport const __stub = true\n')
+      let changed = false
+      for (const name of exportNames) {
+        // Check if export already exists
+        // Use word boundary check to avoid false positives (e.g. getLatestVersion inside getLatestVersionFromGcs)
+        const alreadyExported = new RegExp(`\\bexport\\b[^{]*\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(content)
+        if (!alreadyExported) {
+          const safeName = name.replace(/[^a-zA-Z0-9_$]/g, '_')
+          content += `export const ${safeName} = (..._a) => {}\n`
+          if (safeName !== name) {
+            // Use export rename for names with special chars
+            content += `export { ${safeName} as ${JSON.stringify(name).slice(1,-1)} }\n`.replace(/"/g, '')
+          }
+          changed = true
+        }
+      }
+      if (changed) {
+        await mkdir(dirname(absPath), { recursive: true }).catch(() => {})
+        await writeFile(absPath, content, 'utf8')
+        stubCount++
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  console.log(`   Created/updated ${stubCount} stubs`)
 }
 
 if (succeeded) {
