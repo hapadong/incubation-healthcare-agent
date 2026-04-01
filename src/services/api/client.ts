@@ -1,5 +1,151 @@
 import Anthropic, { type ClientOptions } from '@anthropic-ai/sdk'
 import { randomUUID } from 'crypto'
+import OpenAI, { AzureOpenAI } from 'openai'
+
+// ── HealthAgent: OpenAI-compatible adapter ─────────────────────────────────
+//
+// When HEALTHAGENT_API_BASE_URL is set, we use the OpenAI SDK instead of the
+// Anthropic SDK. This supports Azure OpenAI, local Ollama/vLLM, and any other
+// OpenAI-compatible endpoint.
+//
+// Required env vars:
+//   HEALTHAGENT_API_BASE_URL  — e.g. https://my-resource.openai.azure.com
+//   HEALTHAGENT_API_KEY       — your API key
+//   HEALTHAGENT_MODEL         — model/deployment name (e.g. gpt-4o)
+//
+// Optional for Azure:
+//   HEALTHAGENT_AZURE_API_VERSION  — default: 2025-01-01-preview
+//   HEALTHAGENT_AZURE_DEPLOYMENT   — deployment name if different from model
+
+function buildOpenAIAdapter(): Anthropic | null {
+  const baseURL = process.env.HEALTHAGENT_API_BASE_URL
+  if (!baseURL) return null
+
+  const apiKey = process.env.HEALTHAGENT_API_KEY ?? 'not-required'
+  const isAzure = baseURL.includes('.openai.azure.com')
+
+  const openai: OpenAI = isAzure
+    ? new AzureOpenAI({
+        endpoint: baseURL,
+        apiKey,
+        deployment: process.env.HEALTHAGENT_AZURE_DEPLOYMENT ?? process.env.HEALTHAGENT_MODEL ?? 'gpt-4o',
+        apiVersion: process.env.HEALTHAGENT_AZURE_API_VERSION ?? '2025-01-01-preview',
+      })
+    : new OpenAI({ baseURL, apiKey })
+
+  // Adapter: wraps OpenAI client to match Anthropic SDK interface
+  // The rest of the codebase calls anthropic.beta.messages.create(params)
+  const adapter = {
+    beta: {
+      messages: {
+        create: async (params: Record<string, unknown>) => {
+          const model = (params.model as string | undefined)
+            ?? process.env.HEALTHAGENT_MODEL
+            ?? 'gpt-4o'
+
+          // Convert Anthropic message format to OpenAI format
+          const messages: OpenAI.Chat.ChatCompletionMessageParam[] = []
+
+          // Anthropic uses a top-level 'system' field; OpenAI uses a system message
+          if (params.system) {
+            messages.push({ role: 'system', content: params.system as string })
+          }
+
+          // Convert content blocks to plain strings for OpenAI
+          for (const msg of (params.messages as Array<{role: string, content: unknown}> ?? [])) {
+            const content = typeof msg.content === 'string'
+              ? msg.content
+              : Array.isArray(msg.content)
+                ? msg.content
+                    .filter((b: Record<string, unknown>) => b.type === 'text')
+                    .map((b: Record<string, unknown>) => b.text as string)
+                    .join('\n')
+                : String(msg.content)
+            messages.push({ role: msg.role as 'user' | 'assistant', content })
+          }
+
+          const isStreaming = params.stream === true
+
+          if (isStreaming) {
+            // Return a stream that emits Anthropic-format SSE events
+            const stream = await openai.chat.completions.create({
+              model,
+              messages,
+              max_tokens: params.max_tokens as number ?? 4096,
+              stream: true,
+            })
+
+            // Convert OpenAI stream to Anthropic stream format
+            return openaiStreamToAnthropicStream(stream, model)
+          }
+
+          // Non-streaming
+          const response = await openai.chat.completions.create({
+            model,
+            messages,
+            max_tokens: params.max_tokens as number ?? 4096,
+            stream: false,
+          })
+
+          return openaiResponseToAnthropic(response, model)
+        },
+      },
+    },
+    // Passthrough for non-message operations (auth check, etc.)
+    messages: {
+      create: async (params: Record<string, unknown>) => {
+        return adapter.beta.messages.create(params)
+      },
+    },
+    apiKey,
+    baseURL,
+  }
+
+  return adapter as unknown as Anthropic
+}
+
+function openaiResponseToAnthropic(
+  response: OpenAI.Chat.ChatCompletion,
+  model: string,
+): Record<string, unknown> {
+  const choice = response.choices[0]
+  return {
+    id: response.id,
+    type: 'message',
+    role: 'assistant',
+    model,
+    content: [{ type: 'text', text: choice?.message?.content ?? '' }],
+    stop_reason: choice?.finish_reason === 'stop' ? 'end_turn' : 'max_tokens',
+    stop_sequence: null,
+    usage: {
+      input_tokens: response.usage?.prompt_tokens ?? 0,
+      output_tokens: response.usage?.completion_tokens ?? 0,
+    },
+  }
+}
+
+async function* openaiStreamToAnthropicStream(
+  stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>,
+  model: string,
+): AsyncGenerator<Record<string, unknown>> {
+  const id = `msg_${randomUUID().replace(/-/g, '')}`
+  yield { type: 'message_start', message: { id, type: 'message', role: 'assistant', model, content: [], stop_reason: null, usage: { input_tokens: 0, output_tokens: 0 } } }
+  yield { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } }
+  yield { type: 'ping' }
+
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content
+    if (delta) {
+      yield { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: delta } }
+    }
+    if (chunk.choices[0]?.finish_reason) {
+      yield { type: 'content_block_stop', index: 0 }
+      yield { type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 0 } }
+      yield { type: 'message_stop' }
+    }
+  }
+}
+// ── end HealthAgent adapter ────────────────────────────────────────────────
 import type { GoogleAuth } from 'google-auth-library'
 import {
   checkAndRefreshOAuthTokenIfNeeded,
@@ -296,6 +442,10 @@ export async function getAnthropicClient({
     // we have always been lying about the return type - this doesn't support batching or models
     return new AnthropicVertex(vertexArgs) as unknown as Anthropic
   }
+
+  // ── HealthAgent: use OpenAI-compatible adapter if configured ──────────────
+  const openAIAdapter = buildOpenAIAdapter()
+  if (openAIAdapter) return openAIAdapter
 
   // Determine authentication method based on available tokens
   const clientConfig: ConstructorParameters<typeof Anthropic>[0] = {
