@@ -137,7 +137,7 @@ await ensureEsbuild()
 
 const OUT_DIR = join(ROOT, 'dist')
 await mkdir(OUT_DIR, { recursive: true })
-const OUT_FILE = join(OUT_DIR, 'cli.js')
+const OUT_FILE = join(OUT_DIR, 'cli.cjs')
 
 // Run up to 5 rounds of: esbuild → collect missing → create stubs → retry
 const MAX_ROUNDS = 15
@@ -156,9 +156,18 @@ for (let round = 1; round <= MAX_ROUNDS; round++) {
       '--target=node18',
       '--format=cjs',
       `--outfile="${OUT_FILE}"`,
-      `--banner:js=$'#!/usr/bin/env node\\n// Claude Code v${VERSION} (built from source)\\n// Copyright (c) Anthropic PBC. All rights reserved.\\n'`,
-      '--packages=external',
+      `--banner:js=$'#!/usr/bin/env node\\n// Claude Code v${VERSION} (built from source)\\n// Copyright (c) Anthropic PBC. All rights reserved.\\nconst __import_meta_url = require("url").pathToFileURL(__filename).href;\\n'`,
+      `--define:import.meta.url=__import_meta_url`,
       '--external:bun:*',
+      '--external:fsevents',
+      '--external:@azure/identity',
+      '--external:@anthropic-ai/vertex-sdk',
+      '--external:@aws-sdk/client-bedrock',
+      '--external:@aws-sdk/credential-providers',
+      '--external:@ant/claude-for-chrome-mcp',
+      '--external:modifiers-napi',
+      '--external:color-diff-napi',
+      '--external:sharp',
       '--loader:.md=text',
       '--loader:.txt=text',
       // Resolve the 'src/*' path alias to build-src/src/* (tsconfig paths)
