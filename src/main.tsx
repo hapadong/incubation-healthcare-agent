@@ -1,3 +1,7 @@
+// Load .env file before anything else (HealthAgent configuration)
+import { config as loadDotenv } from "dotenv"
+loadDotenv() // loads .env from cwd or project root
+
 // These side-effects must run before all other imports:
 // 1. profileCheckpoint marks entry before heavy module evaluation begins
 // 2. startMdmRawRead fires MDM subprocesses (plutil/reg query) so they run in
