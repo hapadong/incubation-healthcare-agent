@@ -216,7 +216,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: 'drug_lookup',
-      description: 'Look up FDA-approved drug label information: indications, contraindications, warnings, drug interactions, and adverse reactions. Uses the official FDA label. Best for understanding a drug\'s approved uses and safety profile.',
+      description: 'Look up FDA-approved drug label information: indications, contraindications, warnings, drug interactions, and adverse reactions. The tool automatically tries brand name, generic name, and substance name — do NOT retry with alternative names if it returns a result. Call once per drug.',
       inputSchema: {
         type: 'object',
         properties: {
