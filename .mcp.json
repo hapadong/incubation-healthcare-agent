@@ -28,6 +28,13 @@
       "env": {
         "NCBI_API_KEY": "${NCBI_API_KEY}"
       }
+    },
+    "mimic": {
+      "command": "node",
+      "args": ["mcp/mimic/index.js"],
+      "env": {
+        "GCP_PROJECT": "${MIMIC_GCP_PROJECT}"
+      }
     }
   }
 }

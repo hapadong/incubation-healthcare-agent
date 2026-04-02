@@ -173,6 +173,45 @@ HEALTHAGENT_INTERNAL_TOOLS=pubmed__pubmed_search,pubmed__pubmed_fetch,...
 
 ---
 
+---
+
+## Phase 4 — MIMIC-IV Integration ✅
+
+Real de-identified clinical data from MIMIC-IV v3.1 via Google BigQuery.
+
+### mimic — MIMIC-IV BigQuery
+```
+mcp/mimic/index.js
+Tools: mimic_patient, mimic_labs, mimic_cohort, mimic_icu
+Auth: Application Default Credentials (gcloud auth application-default login)
+Billing: GCP project mimic-491221 (MIMIC_GCP_PROJECT env var)
+Datasets: physionet-data.mimiciv_3_1_hosp, physionet-data.mimiciv_3_1_icu
+```
+
+| Tool | Description |
+|------|-------------|
+| `mimic_patient` | Demographics, diagnoses (ICD), medications for a subject_id |
+| `mimic_labs` | Recent lab results with flag (normal/abnormal) |
+| `mimic_cohort` | Find patients by ICD code or diagnosis keyword |
+| `mimic_icu` | ICU stay summary + latest vitals (HR, BP, SpO2, GCS, temp) |
+
+**POC demo flow:**
+```
+mimic_cohort(keyword: "malignant lung") → pick subject_id
+mimic_patient(subject_id)              → structured profile
+mimic_labs(subject_id)                 → recent labs
+/patient-summary                       → one-pager
+/trial-match                           → eligible trials
+/med-recon                             → medication safety check
+```
+
+**Notes:**
+- MIMIC dates are shifted for de-identification — do not compare to real dates
+- Notes module (`mimiciv_note`) requires separate PhysioNet credentialing
+- ADC credentials auto-refresh; no manual token management needed
+
+---
+
 ## Pending / Future Work
 
 - **SNOMED CT** — requires UTS API key from https://uts.nlm.nih.gov (registration required)
