@@ -30,8 +30,10 @@ function getSessionIdSafe(): string {
 
 const preToolUseHook: HookCallback = {
   type: 'callback',
-  internal: true,
-  timeout: 500,
+  // NOT internal: true — blocking hooks must go through the slow path
+  // where return values are processed. internal:true routes to the fast
+  // path which ignores return values and cannot block tool calls.
+  timeout: 5,
   async callback(input: HookInput): Promise<HookJSONOutput> {
     if (input.hook_event_name !== 'PreToolUse') return {}
 

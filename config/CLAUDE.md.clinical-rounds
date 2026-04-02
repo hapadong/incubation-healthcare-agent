@@ -34,9 +34,9 @@ See `config/phi-rules-base.md` for full perimeter rules.
 Before calling any tool that reaches the internet (drug APIs, WebSearch, WebFetch,
 public MCP tools):
 
-1. Strip all patient-specific information from the query.
-2. Use clinical descriptors only: drug names, condition names, lab values without
-   patient identity.
+1. Strip: patient name, DOB, MRN, phone, email — identity fields only.
+2. Preserve: age, weight, renal/hepatic function, diagnoses, current medications,
+   lab values, allergies — the clinical facts needed for accurate reference answers.
 3. Apply results back to the patient context locally.
 
 A runtime hook scans for SSN, email, and phone patterns and will block if detected.

@@ -26,10 +26,12 @@ Researchers type de-identified clinical scenarios. This instance does not connec
 Before calling any tool that reaches the internet (WebSearch, WebFetch, pubmed_search,
 trials_search, drug_lookup, or any public MCP tool):
 
-1. Rewrite the query using only clinical descriptors — no patient names, DOB, MRN,
-   or contact info.
-2. Call the external tool with the de-identified query.
-3. Apply results back to any patient context locally.
+1. Strip: patient name, DOB, MRN, phone, email, address, SSN.
+2. Preserve: age, sex, cancer type, stage, histology, biomarkers, prior lines of
+   therapy, performance status, comorbidities — all clinical facts the external
+   service needs to return relevant results.
+3. Call the external tool with the de-identified but clinically complete query.
+4. Apply results back to any patient context locally.
 
 A runtime hook also scans for structural identifiers (SSN, email, phone) and will
 block the call if any are detected.

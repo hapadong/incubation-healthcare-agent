@@ -27,15 +27,20 @@ This instance has no connection to live patient data. All clinical context is en
 Before calling any tool that reaches the internet (WebSearch, WebFetch, or any
 MCP tool calling a public API such as pubmed_search, trials_search, drug_lookup):
 
-1. Identify what clinical information you actually need from the external source.
-2. Rewrite the query using only clinical descriptors — no patient names, dates of
-   birth, MRN, contact information, or other direct identifiers.
-3. Call the external tool with the de-identified query.
+1. Strip direct identifiers: patient name, date of birth, MRN, phone, email,
+   address, SSN. These are never needed by external services.
+2. Preserve all clinical facts: age, sex, diagnosis, stage, biomarkers, mutation
+   status, prior treatments, comorbidities, lab values, medications. These are
+   what the external service actually needs to return useful results.
+3. Call the external tool with the de-identified but clinically complete query.
 4. Apply the results back to any patient context locally after retrieval.
 
-Example:
-  Wrong: search("warfarin aspirin interaction for John Smith DOB 1952-03-14")
-  Right: search("warfarin aspirin interaction elderly male")
+Examples:
+  Wrong:  search("EGFR mutation trials for Peter Johnson DOB 1980 714-555-1234")
+  Right:  search("EGFR exon 19 deletion NSCLC clinical trials 2025 male ~45 years old")
+
+  Wrong:  drug_interactions(["warfarin", "aspirin"]) — search("patient John Smith")
+  Right:  drug_interactions(["warfarin", "aspirin", "sertraline"]) — full drug list preserved
 
 ## Clinical Scope
 

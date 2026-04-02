@@ -366,8 +366,10 @@ export async function setup(
       process.env.HEALTHAGENT_API_BASE_URL ||
       process.argv[1]?.includes('ha')
     ) {
-      void import('./utils/healthagent/complianceHooks.js').then(m =>
+      import('./utils/healthagent/complianceHooks.js').then(m =>
         m.registerComplianceHooks(),
+      ).catch(err =>
+        console.error('[HealthAgent] Failed to load compliance hooks:', err),
       ) // Register PHI guardrail + audit logger for Verity Health Agent
     }
     if (feature('TEAMMEM')) {
