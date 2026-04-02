@@ -1,0 +1,13 @@
+{
+  "name": "@healthagent/mcp-trials",
+  "version": "0.1.0",
+  "description": "ClinicalTrials.gov MCP server for Verity Health Agent",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  }
+}
