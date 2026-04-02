@@ -16,6 +16,11 @@
 3. User runs the build themselves
 4. User tests the result
 
+## Git Rules
+
+- **Never commit or push without explicit user instruction.** Do not auto-commit after edits.
+- **No co-author lines in commits.** Do not add `Co-Authored-By` or any Claude/AI attribution to commit messages. Undercover mode — commits appear as the user's own work.
+
 ## Token-Saving Rules
 
 - Work only on source files — they are small and targeted
