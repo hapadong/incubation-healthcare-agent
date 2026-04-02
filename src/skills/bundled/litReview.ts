@@ -1,71 +1,33 @@
 import { registerBundledSkill } from '../bundledSkills.js'
 
-const SKILL_PROMPT = `# Clinical Literature Review
+const SKILL_PROMPT = `Search the medical literature and practice guidelines for the topic below, then write a structured research summary.
 
-## Goal
-Produce a structured, evidence-based literature review for the clinical question provided. Synthesize findings from primary research and clinical practice guidelines into a concise, actionable summary.
+## Search plan
+1. Call \`guidelines_search\` — use the primary condition as \`condition\` and the treatment/topic as \`topic\` (max_results: 5). Omit year_from unless the user gave a date range.
+2. Call \`pubmed_search\` — target systematic reviews and clinical trials. Use 2–3 MeSH/clinical terms joined with AND; do not chain more than 4 terms. Sort by relevance.
+3. Call \`pubmed_fetch\` once with the 5–8 most relevant PMIDs (comma-joined). Do not fetch every result.
+4. If any search returns 0 results, retry with fewer terms.
 
-## Steps
+## Output format
 
-### 1. Parse the clinical question
-Identify the PICO elements (where applicable):
-- **P** — Patient/Population (disease, condition, demographics)
-- **I** — Intervention (treatment, drug, procedure, test)
-- **C** — Comparator (standard of care, placebo, alternative) — if stated
-- **O** — Outcome (survival, response rate, safety, QoL)
+### [Topic]
+**Population / question:** [brief restatement]
 
-Extract 2–3 PubMed search terms from P+I+O. Use MeSH/clinical terminology.
+**Guidelines**
+- [Organization, year] — [headline recommendation] — [URL]
 
-### 2. Search clinical guidelines
-Call \`guidelines_search\` with the primary condition as \`condition\` and the intervention/topic as \`topic\`. Request max_results: 5. Do NOT add year_from unless the user specified a date range.
+**Research findings**
+- [Study type, author/year, key result, PMID]
+- (repeat for each relevant study)
 
-### 3. Search primary literature
-Call \`pubmed_search\` focusing on high-evidence study types. Construct the query to target:
-- Systematic reviews and meta-analyses: include "[pt] OR meta-analysis[pt]" or filter with "systematic review"
-- RCTs if the question is about treatment efficacy
-- Use 2–3 MeSH concepts joined with AND — do NOT chain more than 4 terms
+**Gaps and limitations**
+[What is missing, conflicting, or uncertain in the literature]
 
-Fetch abstracts for the 5–8 most relevant results using \`pubmed_fetch\` (one call with comma-joined PMIDs).
+**Summary**
+[3–5 sentences synthesizing the overall state of evidence]
 
-### 4. Synthesize and output
-
-Structure the output as follows:
-
----
-
-## Literature Review: [Clinical Question]
-
-### Clinical Question
-[Restate the question clearly. List PICO elements if applicable.]
-
-### Key Guidelines
-[For each relevant guideline: organization, year, headline recommendation, PubMed link. Limit to 3–5 most relevant.]
-
-### Evidence Summary
-
-#### High-level evidence (systematic reviews / meta-analyses)
-[Summarize key findings, effect sizes, confidence, population studied. Cite PMID.]
-
-#### Randomized controlled trials
-[Summarize landmark or recent RCTs. Cite PMID.]
-
-#### Notable gaps or limitations
-[What evidence is missing, outdated, or conflicting?]
-
-### Clinical Bottom Line
-[2–4 sentence actionable summary. State level of evidence where appropriate (e.g., "Strong evidence from multiple RCTs...", "Guideline-concordant recommendation...").]
-
-### Sources
-[Numbered list of all PMIDs and guideline URLs referenced.]
-
----
-
-## Rules
-- Keep all tool calls clinical and de-identified — search terms should be disease/treatment concepts only, never personal details.
-- Always call both guidelines_search AND pubmed_search — do not skip either.
-- Do NOT call pubmed_fetch on every search result; fetch only the 5–8 most relevant PMIDs in a single call.
-- If a search returns 0 results, broaden the query (fewer terms, drop the topic filter) and retry once.
-- Keep the output focused on the clinical question — do not expand scope to unrelated conditions.
+**References**
+[numbered list of PMIDs and guideline URLs]
 `
 
 export function registerLitReviewSkill(): void {
