@@ -1,0 +1,13 @@
+{
+  "name": "@healthagent/mcp-drugs",
+  "version": "0.1.0",
+  "description": "Drug information MCP server for Verity Health Agent",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  }
+}

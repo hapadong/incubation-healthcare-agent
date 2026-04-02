@@ -10,6 +10,13 @@
     "trials": {
       "command": "node",
       "args": ["mcp/trials/index.js"]
+    },
+    "drugs": {
+      "command": "node",
+      "args": ["mcp/drugs/index.js"],
+      "env": {
+        "OPENFDA_API_KEY": "${OPENFDA_API_KEY}"
+      }
     }
   }
 }
