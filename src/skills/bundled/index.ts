@@ -8,6 +8,7 @@ import { registerLoremIpsumSkill } from './loremIpsum.js'
 import { registerRememberSkill } from './remember.js'
 import { registerSimplifySkill } from './simplify.js'
 import { registerSkillifySkill } from './skillify.js'
+import { registerClinicalCodingSkill } from './clinicalCoding.js'
 import { registerLitReviewSkill } from './litReview.js'
 import { registerMedReconSkill } from './medRecon.js'
 import { registerTrialMatchSkill } from './trialMatch.js'
@@ -38,6 +39,7 @@ export function initBundledSkills(): void {
   registerLitReviewSkill()
   registerTrialMatchSkill()
   registerMedReconSkill()
+  registerClinicalCodingSkill()
   if (feature('KAIROS') || feature('KAIROS_DREAM')) {
     /* eslint-disable @typescript-eslint/no-require-imports */
     const { registerDreamSkill } = require('./dream.js')
