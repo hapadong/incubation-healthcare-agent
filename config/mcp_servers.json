@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "pubmed": {
+      "command": "node",
+      "args": ["mcp/pubmed/index.js"],
+      "env": {
+        "NCBI_API_KEY": "${NCBI_API_KEY}"
+      }
+    }
+  }
+}
