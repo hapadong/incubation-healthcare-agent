@@ -4,6 +4,38 @@ Verity Health Agent — a clinical AI assistant built on the Claude Code CLI, co
 
 ---
 
+## Product Vision
+
+HealthAgent is a **clinical AI platform**, not just a CLI tool. The CLI is the backend engine. The end-state is a hosted service with a web UI on top:
+
+```
+Customers (clinicians, care teams)
+        ↓
+HealthAgent Web UI        — charts, structured patient views, exportable reports
+        ↓
+HealthAgent Service       — this codebase (the engine)
+        ↓
+Azure OpenAI (gpt-4o)     — HIPAA BAA-covered model backend
+        ↓
+Clinical MCP tools        — MIMIC, PubMed, trials, drugs, patient records...
+```
+
+**What makes this a real clinical product vs. stock Claude Code + MCP:**
+
+| Differentiator | Why it matters |
+|----------------|---------------|
+| **Azure OpenAI backend** | Azure has HIPAA BAA coverage — deployable in real clinical settings. Anthropic currently does not offer a BAA. |
+| **PHI guardrail** | PreToolUse hook scans external calls for SSN, email, phone patterns before data leaves the system. No equivalent in stock Claude Code. |
+| **Audit trail** | Every tool call logged to append-only JSONL. Required for clinical compliance. |
+| **Patient persistence** | Stateful patient records on disk — not a stateless chatbot. Survives across sessions. |
+| **Compiled skills with gating** | Skills enabled/disabled by environment, with dynamic prompts. Markdown skills in stock Claude Code can't do this. |
+| **Web UI (planned)** | Productized interface with native chart rendering, structured clinical views, PDF export. |
+| **Owned stack** | Full control over pricing, data, customization, and customer relationships. |
+
+The CLI remains useful for power users and internal development. Customers will interact exclusively through the web UI.
+
+---
+
 ## Architecture Overview
 
 ```
@@ -11,8 +43,9 @@ HealthAgent CLI (Claude Code fork)
   ├── Model backend: Azure OpenAI gpt-4o (or Ollama / vLLM)
   ├── PHI guardrail: PreToolUse hook scans external calls
   ├── Audit trail: PostToolUse hook → ~/.healthagent/audit/YYYY-MM-DD.jsonl
-  ├── MCP servers: clinical knowledge tools (Phase 2)
-  └── Bundled skills: clinical workflow automation (Phase 3)
+  ├── MCP servers: clinical knowledge tools (Phase 2+)
+  ├── Bundled skills: clinical workflow automation (Phase 3+)
+  └── Patient persistence: ~/.healthagent/patients/ (Phase 5)
 ```
 
 Activated by setting `HEALTHAGENT_API_BASE_URL` in `.env`. See `.env` for all configuration options.
