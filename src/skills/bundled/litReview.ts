@@ -61,7 +61,7 @@ Structure the output as follows:
 ---
 
 ## Rules
-- PHI rule: Do NOT include any patient name, MRN, date of birth, or identifying information in any tool call. The question should be clinical and de-identified.
+- Keep all tool calls clinical and de-identified — search terms should be disease/treatment concepts only, never personal details.
 - Always call both guidelines_search AND pubmed_search — do not skip either.
 - Do NOT call pubmed_fetch on every search result; fetch only the 5–8 most relevant PMIDs in a single call.
 - If a search returns 0 results, broaden the query (fewer terms, drop the topic filter) and retry once.
