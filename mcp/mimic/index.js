@@ -169,8 +169,38 @@ async function mimicLabs({ subject_id, hadm_id, limit = 20 }) {
   }
 }
 
+// Common lay terms → MIMIC ICD-9 medical terminology
+const SYNONYMS = {
+  'lung cancer': 'malignant lung',
+  'cancer': 'malignant neoplasm',
+  'heart attack': 'myocardial infarction',
+  'stroke': 'cerebral infarction',
+  'kidney failure': 'renal failure',
+  'kidney disease': 'chronic kidney',
+  'copd': 'chronic obstructive',
+  'blood clot': 'thrombosis',
+  'blood pressure': 'hypertension',
+  'diabetes': 'diabetes',
+  'liver failure': 'hepatic failure',
+  'liver disease': 'hepatic',
+  'heart failure': 'heart failure',
+  'afib': 'atrial fibrillation',
+  'a-fib': 'atrial fibrillation',
+}
+
 async function mimicCohort({ icd_code, keyword, limit = 10 }) {
   const cap = Math.min(limit, 50)
+
+  // Translate lay terms to MIMIC medical terminology
+  if (keyword) {
+    const lower = keyword.toLowerCase()
+    for (const [lay, medical] of Object.entries(SYNONYMS)) {
+      if (lower.includes(lay)) {
+        keyword = lower.replace(lay, medical)
+        break
+      }
+    }
+  }
 
   let sql, params
 
@@ -319,7 +349,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         type: 'object',
         properties: {
           icd_code: { type: 'string', description: 'Exact ICD-9 or ICD-10 code. E.g. "J159" for unspecified bacterial pneumonia, "4019" for hypertension.' },
-          keyword: { type: 'string', description: 'Medical term to search in diagnosis descriptions. Use 1-2 words. E.g. "bacterial pneumonia", "sepsis", "malignant lung", "myocardial infarction".' },
+          keyword: { type: 'string', description: 'Diagnosis keyword. Common lay terms are auto-translated (e.g. "lung cancer" → "malignant lung", "heart attack" → "myocardial infarction"). Use 1-2 words.' },
           limit: { type: 'number', description: 'Max patients to return (default 10, max 50).' },
         },
       },
