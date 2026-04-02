@@ -33,11 +33,9 @@ const SKILL_PROMPT = `Search the medical literature and practice guidelines for 
 export function registerLitReviewSkill(): void {
   registerBundledSkill({
     name: 'lit-review',
-    description:
-      'Structured clinical literature review. Searches PubMed for systematic reviews, meta-analyses, and RCTs, then cross-references clinical practice guidelines (ASCO, ESMO, AHA, ADA, etc.) to produce an evidence synthesis with a clinical bottom line.',
-    argumentHint: '<clinical question>',
-    whenToUse:
-      'Use when the user asks for a literature review, evidence summary, or wants to know what the evidence says about a treatment, drug, procedure, or clinical question.',
+    description: 'Search published research and guidelines on a health topic and write a structured summary.',
+    argumentHint: '<topic>',
+    whenToUse: 'Use when the user invokes /lit-review or asks for a literature search on a health topic.',
     userInvocable: true,
     isEnabled: () => Boolean(process.env.HEALTHAGENT_API_BASE_URL),
     async getPromptForCommand(args) {
