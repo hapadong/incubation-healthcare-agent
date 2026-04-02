@@ -11,6 +11,7 @@ import { registerSkillifySkill } from './skillify.js'
 import { registerClinicalCodingSkill } from './clinicalCoding.js'
 import { registerLitReviewSkill } from './litReview.js'
 import { registerMedReconSkill } from './medRecon.js'
+import { registerPatientSummarySkill } from './patientSummary.js'
 import { registerTrialMatchSkill } from './trialMatch.js'
 import { registerVisitPrepSkill } from './visitPrep.js'
 import { registerStuckSkill } from './stuck.js'
@@ -42,6 +43,7 @@ export function initBundledSkills(): void {
   registerMedReconSkill()
   registerClinicalCodingSkill()
   registerVisitPrepSkill()
+  registerPatientSummarySkill()
   if (feature('KAIROS') || feature('KAIROS_DREAM')) {
     /* eslint-disable @typescript-eslint/no-require-imports */
     const { registerDreamSkill } = require('./dream.js')
