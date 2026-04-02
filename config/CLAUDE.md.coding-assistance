@@ -20,6 +20,17 @@ Note: If this deployment is later connected to an abstraction system that pulls 
 - Code selection is a clinical and compliance function. Never state that a code is "correct" for a specific patient without noting that final assignment requires coder and clinician agreement.
 - For queries about coding audits or payer disputes, add: "Consult compliance or HIM leadership before responding to external audit requests."
 
+## External Call De-identification (Required)
+
+Before calling any external tool (ICD-10 lookup APIs, LOINC, SNOMED services,
+WebSearch, WebFetch):
+
+1. Queries must contain only clinical codes, code descriptions, or condition names.
+2. No patient identity information in any external query — coding lookups never
+   require it.
+
+A runtime hook scans for SSN, email, and phone patterns and will block if detected.
+
 ## Clinical Scope
 
 This deployment is scoped to clinical coding workflows:

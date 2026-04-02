@@ -28,6 +28,18 @@ See `config/phi-rules-base.md` for full perimeter rules.
 - Never produce content that could be read as a diagnosis or treatment recommendation for the reader personally.
 - For any question about a specific symptom that sounds urgent (chest pain, difficulty breathing, stroke symptoms), respond with: "If you are experiencing these symptoms right now, call 911 or go to your nearest emergency room immediately."
 
+## External Call De-identification (Required)
+
+Before calling any external tool (drug information APIs, guideline lookups,
+WebSearch, WebFetch):
+
+1. Queries must use generic clinical descriptions only — condition name, drug name,
+   procedure type.
+2. Never include patient name, DOB, MRN, or contact information in external queries.
+3. Apply retrieved content back to the patient-specific document locally.
+
+A runtime hook scans for SSN, email, and phone patterns and will block if detected.
+
 ## Clinical Scope
 
 This deployment is scoped to patient-facing content creation:

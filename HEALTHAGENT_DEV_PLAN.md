@@ -102,31 +102,61 @@ healthagent "hello"
 ---
 
 ## Phase 1 — Compliance Layer
-**Goal:** PHI protection + audit trail baked into the runtime
+**Goal:** Prevent PHI from leaking to external services + append-only audit trail
 **Duration:** ~1 week
-**Exit criteria:** Every input/output is scanned; every action is logged locally
+**Exit criteria:** All external tool calls are scanned; every action is logged locally
 
-### 1.1 PHI Scanner Hook (PreToolUse)
+### Design principle
 
-Built as a hook in `src/utils/hooks/`, registered automatically on startup.
+Hospital staff know their own PHI obligations. The system does not try to manage
+who can see PHI internally. The one gap it fills: when the agent makes external
+calls (web search, public APIs), PHI can leak out silently. That is the only thing
+this layer prevents.
 
-**Detects all 18 HIPAA Safe Harbor identifiers:**
-- Names, geographic subdivisions smaller than state (zip codes, addresses)
-- Dates more specific than year (DOB, admission dates, discharge dates)
-- Phone numbers, fax numbers, email addresses
-- SSNs, MRNs, health plan beneficiary numbers, account numbers
-- Certificate/license numbers, VINs, device identifiers
-- Web URLs, IP addresses, biometric identifiers, full-face photos
-- Any unique identifying number or code
+**PHI stays within the authorized perimeter:**
+```
+Authorized perimeter: local model + EHR MCP + audit log + workstation
+    → PHI allowed to flow freely inside
 
-**Behavior:**
-- Warn on detection — never redact silently
-- Log detection event (not the content) to audit trail
-- Strict mode (configurable): block tool execution, require explicit user override
-- Runs on every tool call input — deterministic regex, no ML, auditable
+External calls: WebSearch, WebFetch, public MCP servers (PubMed, trials, drugs)
+    → PHI must not appear in queries sent to these
+```
 
-### 1.2 Local Audit Logger (PostToolUse + PostToolUseFailure)
+### 1.1 External PHI Guard (PreToolUse hook)
 
+**File:** `src/utils/healthagent/complianceHooks.ts`
+Registered once at session startup via `registerHookCallbacks()` — fires for all
+agents in the session (main agent, any subagent) with no per-agent wiring.
+
+**Scope:** Only fires on external tools:
+- `WebSearch`, `WebFetch` — always external
+- MCP tools — external by default; internal tools listed in `HEALTHAGENT_INTERNAL_TOOLS`
+  env var (comma-separated tool names) are excluded from scanning
+
+**Detection:** Two-layer approach:
+1. **Primary:** CLAUDE.md behavioral instruction — the agent is instructed to
+   de-identify queries before calling external tools. The model's contextual
+   judgment handles names, dates, and indirect identifiers that regex cannot.
+2. **Backstop:** Narrow high-precision regex for structured identifiers only:
+   - SSN: `\b\d{3}[-\s]\d{2}[-\s]\d{4}\b`
+   - Email: standard RFC 5322 local-part + domain pattern
+   - US Phone: `\b(\+1[-\s]?)?\(?\d{3}\)?[-\s.]\d{3}[-\s.]\d{4}\b`
+   These patterns have low false-positive rates in clinical query text.
+   Names, dates, and ZIP codes are intentionally excluded — too many false
+   positives; the model instruction handles these better.
+
+**On detection:**
+- Block the tool call (`decision: 'block'`)
+- Show message: `"Blocked: possible PHI detected in external call ([category]). Re-phrase using clinical descriptors only."`
+- Log detection event to audit trail (category only, not content)
+
+**On clean pass:**
+- Allow tool call through
+- Log to audit trail (hashed input)
+
+### 1.2 Local Audit Logger (PostToolUse)
+
+**File:** `src/utils/healthagent/auditLogger.ts`
 Append-only log at `~/.healthagent/audit/YYYY-MM-DD.jsonl`
 
 ```json
@@ -134,41 +164,56 @@ Append-only log at `~/.healthagent/audit/YYYY-MM-DD.jsonl`
   "timestamp": "2025-03-31T14:23:11Z",
   "session_id": "uuid",
   "user": "local-username",
-  "action": "tool_call",
   "tool": "pubmed_search",
-  "input_hash": "sha256-of-input",
-  "phi_detected": false,
-  "result_status": "success",
-  "model": "llama3.1-70b",
-  "duration_ms": 512
+  "external": true,
+  "input_hash": "sha256-of-serialized-input",
+  "phi_blocked": false,
+  "outcome": "success"
 }
 ```
 
 **Properties:**
-- Append-only, no delete, no overwrite
-- Inputs hashed (sha256), not stored — audit trail without PHI risk
-- Daily log files, configurable retention (default 90 days)
-- Exportable to CSV for compliance review
+- Append-only (`fs.appendFileSync`) — no delete, no overwrite
+- Inputs hashed (sha256), never stored raw — audit trail without PHI risk
+- Daily log files, directory auto-created at `~/.healthagent/audit/`
+- All tool calls logged, not just external ones
 
 ### 1.3 Consent Gate (Session Start)
 
-Shown once per day on session start:
-```
-HealthAgent — Data Notice
-This session is logged locally. Do not enter real patient identifiers.
-Use de-identified or anonymized data only.
-[Continue] [Exit]
-```
-
-Automatically skipped in batch/headless mode (`-p` flag).
-
-### 1.4 Deliverable
+One-line notice shown once per day on interactive session start.
+Stored in `~/.healthagent/consent-date` — skipped if today's date matches.
+Automatically skipped in batch/headless mode (`-p` flag or `HEALTHAGENT_HEADLESS=1`).
 
 ```
-healthagent "patient John Smith DOB 01/01/1980..."
-→ PHI Scanner: "Warning: possible PHI detected (name, date of birth)"
-→ Audit log entry written with input hash
-→ User prompted to confirm or cancel
+Verity Health Agent — Session Notice
+External queries (web search, public APIs) are scanned to prevent PHI leakage.
+All tool calls are logged locally to ~/.healthagent/audit/.
+[Enter to continue]
+```
+
+### 1.4 Implementation files
+
+```
+src/utils/healthagent/
+├── phiScanner.ts       — regex patterns + isExternalTool()
+├── auditLogger.ts      — append-only JSONL writer
+└── complianceHooks.ts  — registerComplianceHooks() called from src/setup.ts
+```
+
+Registered in `src/setup.ts` alongside `registerSessionFileAccessHooks()`,
+conditional on `process.env.HEALTHAGENT_API_BASE_URL` or binary name `ha`.
+
+### 1.5 Deliverable
+
+```
+ha "check for warfarin interactions for patient John Smith DOB 01/01/1952"
+→ Agent de-identifies before calling drug API (CLAUDE.md instruction)
+→ Clean query reaches drug_interactions tool
+
+ha "search trials" [agent constructs query with PHI by mistake]
+→ PreToolUse hook: SSN/email/phone regex fires → blocks call
+→ "Blocked: possible PHI detected in external call (email). Re-phrase using clinical descriptors only."
+→ Audit log: { phi_blocked: true, tool: "WebSearch", ... }
 ```
 
 ---

@@ -29,6 +29,18 @@ See `config/phi-rules-base.md` for full perimeter rules.
 - For any urgent patient safety concern, respond immediately with: "This is a clinical support tool — contact the attending or specialist directly for urgent decisions."
 - For medication queries at high acuity (ICU, sepsis, anaphylaxis contexts): always append "Verify dosing against institutional protocol and pharmacy."
 
+## External Call De-identification (Required)
+
+Before calling any tool that reaches the internet (drug APIs, WebSearch, WebFetch,
+public MCP tools):
+
+1. Strip all patient-specific information from the query.
+2. Use clinical descriptors only: drug names, condition names, lab values without
+   patient identity.
+3. Apply results back to the patient context locally.
+
+A runtime hook scans for SSN, email, and phone patterns and will block if detected.
+
 ## Clinical Scope
 
 Optimized for rapid point-of-care queries:

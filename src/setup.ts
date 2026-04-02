@@ -362,6 +362,14 @@ export async function setup(
     void import('./utils/sessionFileAccessHooks.js').then(m =>
       m.registerSessionFileAccessHooks(),
     ) // Register session file access analytics hooks
+    if (
+      process.env.HEALTHAGENT_API_BASE_URL ||
+      process.argv[1]?.includes('ha')
+    ) {
+      void import('./utils/healthagent/complianceHooks.js').then(m =>
+        m.registerComplianceHooks(),
+      ) // Register PHI guardrail + audit logger for Verity Health Agent
+    }
     if (feature('TEAMMEM')) {
       void import('./services/teamMemorySync/watcher.js').then(m =>
         m.startTeamMemoryWatcher(),
