@@ -182,7 +182,7 @@ Real de-identified clinical data from MIMIC-IV v3.1 via Google BigQuery.
 ### mimic — MIMIC-IV BigQuery
 ```
 mcp/mimic/index.js
-Tools: mimic_patient, mimic_labs, mimic_cohort, mimic_icu
+Tools: mimic_patient, mimic_labs, mimic_cohort, mimic_icu, mimic_sql
 Auth: Application Default Credentials (gcloud auth application-default login)
 Billing: GCP project mimic-491221 (MIMIC_GCP_PROJECT env var)
 Datasets: physionet-data.mimiciv_3_1_hosp, physionet-data.mimiciv_3_1_icu
@@ -194,15 +194,14 @@ Datasets: physionet-data.mimiciv_3_1_hosp, physionet-data.mimiciv_3_1_icu
 | `mimic_labs` | Recent lab results with flag (normal/abnormal) |
 | `mimic_cohort` | Find patients by ICD code or diagnosis keyword |
 | `mimic_icu` | ICU stay summary + latest vitals (HR, BP, SpO2, GCS, temp) |
+| `mimic_sql` | Execute arbitrary BigQuery SQL for analytics; SELECT/WITH only, capped at 1000 rows |
 
 **POC demo flow:**
 ```
-mimic_cohort(keyword: "malignant lung") → pick subject_id
-mimic_patient(subject_id)              → structured profile
-mimic_labs(subject_id)                 → recent labs
-/patient-summary                       → one-pager
-/trial-match                           → eligible trials
-/med-recon                             → medication safety check
+/patient load 10032        → fetch from MIMIC, save to disk, load into session
+/trial-match               → eligible trials using loaded patient context
+/med-recon                 → medication safety check
+/mimic-analytics <question> → natural language → SQL → results + Python plot
 ```
 
 **Notes:**
@@ -212,8 +211,61 @@ mimic_labs(subject_id)                 → recent labs
 
 ---
 
+## Phase 5 — Orchestration Skills & Patient Persistence ✅
+
+### New skills
+
+| Skill | Command | Description |
+|-------|---------|-------------|
+| `/mimic-workflow` | `/mimic-workflow <condition>` | End-to-end: find patient → profile → labs → summary → trials → med safety |
+| `/mimic-analytics` | `/mimic-analytics <question>` | Natural language → BigQuery SQL → results → Python matplotlib script |
+| `/patient` | `/patient list\|load\|new\|refresh\|update` | Manage persistent patient records on disk |
+
+### patients — Patient Record Store
+```
+mcp/patients/index.js
+Tools: patient_list, patient_load, patient_save, patient_update, patient_generate_id
+Storage: ~/.healthagent/patients/<id>.json
+```
+
+| Tool | Description |
+|------|-------------|
+| `patient_list` | List all saved patient records |
+| `patient_load` | Load a record by ID; returns 404 with available IDs if not found |
+| `patient_save` | Create new record; rejects hollow saves (raw_text with no structured fields) |
+| `patient_update` | Merge-update specific fields of an existing record |
+| `patient_generate_id` | Generate sequential ID: `manual_YYYYMMDD_NNN` |
+
+**Patient ID conventions:**
+- MIMIC patients: `mimic_<subject_id>` (e.g. `mimic_10032`)
+- Manual (free text) patients: `manual_YYYYMMDD_NNN` (e.g. `manual_20260402_001`)
+
+**Two sources of patient data:**
+```
+/patient load 10032             → fetches from MIMIC BigQuery, saves to disk
+/patient new "67M with NSTEMI..." → extracts structured data from free text, saves to disk
+```
+
+**Design rules:**
+- Patient records are updated only by explicit load/refresh/update commands — skills are read-only consumers
+- `patient_save` validates: if raw_text is provided, at least one structured field must be non-empty
+- No auto-load; user must explicitly issue `/patient load <id>`
+
+---
+
+## Bug Fixes & Stability
+
+| Issue | Fix |
+|-------|-----|
+| `SandboxManager.getSandboxViolationStore is not a function` | Stubbed missing method in `sandbox-adapter.ts` — installed package lacks it |
+| gpt-4o spawns `Agent` tool for every skill invocation | `AgentTool.isEnabled()` returns `false` when `HEALTHAGENT_API_BASE_URL` is set |
+| Azure OpenAI rejects array schemas without `items` | Added `items: { type: 'object' }` to all array fields in MCP tool schemas |
+| `patient_save` accepts hollow records | Server-side validation rejects saves where raw_text present but all structured fields empty |
+
+---
+
 ## Pending / Future Work
 
+- **Web UI** — thin Express + React wrapper over existing backend; renders charts natively (no Python script needed), structured patient views, multi-panel layout
 - **SNOMED CT** — requires UTS API key from https://uts.nlm.nih.gov (registration required)
-- **Azure content filter** — for full clinical query support, configure the gpt-4o deployment in Azure AI Foundry to use a less restrictive content filter profile
-- **Phase 4** — POC demo combining all skills in a single patient workflow
+- **Azure content filter** — configure gpt-4o deployment in Azure AI Foundry to use a less restrictive content filter profile

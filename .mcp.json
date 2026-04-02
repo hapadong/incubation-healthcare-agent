@@ -35,6 +35,10 @@
       "env": {
         "GCP_PROJECT": "${MIMIC_GCP_PROJECT}"
       }
+    },
+    "patients": {
+      "command": "node",
+      "args": ["mcp/patients/index.js"]
     }
   }
 }

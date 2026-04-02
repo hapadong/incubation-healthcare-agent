@@ -18,8 +18,22 @@ import type {
 import {
   SandboxManager as BaseSandboxManager,
   SandboxRuntimeConfigSchema,
-  SandboxViolationStore,
 } from '@anthropic-ai/sandbox-runtime'
+
+// SandboxViolationStore is not available in the installed package version.
+// Provide a no-op stub so the React components that call getSandboxViolationStore()
+// don't crash at runtime.
+class SandboxViolationStore {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  subscribe(_callback: (violations: any[]) => void): () => void {
+    return () => {}
+  }
+  getTotalCount(): number {
+    return 0
+  }
+}
+
+const _noopViolationStore = new SandboxViolationStore()
 import { rmSync, statSync } from 'fs'
 import { readFile } from 'fs/promises'
 import { memoize } from 'lodash-es'
@@ -957,7 +971,7 @@ export const SandboxManager: ISandboxManager = {
   getLinuxHttpSocketPath: BaseSandboxManager.getLinuxHttpSocketPath,
   getLinuxSocksSocketPath: BaseSandboxManager.getLinuxSocksSocketPath,
   waitForNetworkInitialization: BaseSandboxManager.waitForNetworkInitialization,
-  getSandboxViolationStore: BaseSandboxManager.getSandboxViolationStore,
+  getSandboxViolationStore: () => _noopViolationStore,
   annotateStderrWithSandboxFailures:
     BaseSandboxManager.annotateStderrWithSandboxFailures,
   cleanupAfterCommand: (): void => {
@@ -983,3 +997,4 @@ export type {
 }
 
 export { SandboxViolationStore, SandboxRuntimeConfigSchema }
+

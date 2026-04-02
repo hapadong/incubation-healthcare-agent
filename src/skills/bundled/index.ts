@@ -14,6 +14,9 @@ import { registerMedReconSkill } from './medRecon.js'
 import { registerPatientSummarySkill } from './patientSummary.js'
 import { registerTrialMatchSkill } from './trialMatch.js'
 import { registerVisitPrepSkill } from './visitPrep.js'
+import { registerMimicWorkflowSkill } from './mimicWorkflow.js'
+import { registerMimicAnalyticsSkill } from './mimicAnalytics.js'
+import { registerPatientRecordSkill } from './patientRecord.js'
 import { registerStuckSkill } from './stuck.js'
 import { registerUpdateConfigSkill } from './updateConfig.js'
 import { registerVerifySkill } from './verify.js'
@@ -44,6 +47,9 @@ export function initBundledSkills(): void {
   registerClinicalCodingSkill()
   registerVisitPrepSkill()
   registerPatientSummarySkill()
+  registerMimicWorkflowSkill()
+  registerMimicAnalyticsSkill()
+  registerPatientRecordSkill()
   if (feature('KAIROS') || feature('KAIROS_DREAM')) {
     /* eslint-disable @typescript-eslint/no-require-imports */
     const { registerDreamSkill } = require('./dream.js')

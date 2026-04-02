@@ -255,6 +255,46 @@ async function mimicCohort({ icd_code, keyword, limit = 10 }) {
   }
 }
 
+async function mimicSql({ sql, limit = 500 }) {
+  const cap = Math.min(limit, 1000)
+
+  // Safety: only allow SELECT statements
+  const trimmed = sql.trim().toUpperCase()
+  if (!trimmed.startsWith('SELECT') && !trimmed.startsWith('WITH')) {
+    return { error: 'Only SELECT and WITH queries are allowed.' }
+  }
+
+  // Inject LIMIT if not present (protect against returning millions of rows)
+  let safeSql = sql.trim()
+  if (!/\bLIMIT\s+\d+\s*$/i.test(safeSql)) {
+    safeSql += `\nLIMIT ${cap}`
+  }
+
+  const rows = await query(safeSql)
+  const truncated = rows.length >= cap
+
+  // Serialize BigQuery date/time objects to strings
+  const serialized = rows.map(row => {
+    const out = {}
+    for (const [k, v] of Object.entries(row)) {
+      if (v && typeof v === 'object' && v.value !== undefined) {
+        out[k] = v.value
+      } else {
+        out[k] = v
+      }
+    }
+    return out
+  })
+
+  return {
+    returned: serialized.length,
+    truncated,
+    note: truncated ? `Results capped at ${cap}. Add a more specific WHERE clause or smaller LIMIT to get complete data.` : undefined,
+    columns: serialized.length > 0 ? Object.keys(serialized[0]) : [],
+    rows: serialized,
+  }
+}
+
 async function mimicIcu({ subject_id, stay_id }) {
   const id = parseInt(subject_id, 10)
 
@@ -379,6 +419,40 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
+      name: 'mimic_sql',
+      description: `Execute a BigQuery SQL query against MIMIC-IV. Use for analytics, aggregations, cohort statistics, trend analysis, and any question not covered by the other tools. Only SELECT/WITH queries allowed. Results capped at 1000 rows.
+
+Table reference (use backtick-quoted full paths):
+HOSP dataset: \`physionet-data.mimiciv_3_1_hosp\`
+  .patients      — subject_id, gender, anchor_age, anchor_year_group, dod
+  .admissions    — subject_id, hadm_id, admittime, dischtime, deathtime, admission_type, discharge_location, race, marital_status, language, hospital_expire_flag
+  .diagnoses_icd — subject_id, hadm_id, seq_num, icd_code, icd_version
+  .d_icd_diagnoses — icd_code, icd_version, long_title
+  .prescriptions — subject_id, hadm_id, drug, route, dose_val_rx, dose_unit_rx, doses_per_24_hrs, starttime, stoptime
+  .labevents     — subject_id, hadm_id, itemid, charttime, value, valuenum, valueuom, flag
+  .d_labitems    — itemid, label, fluid, category
+  .procedures_icd — subject_id, hadm_id, seq_num, icd_code, icd_version
+ICU dataset: \`physionet-data.mimiciv_3_1_icu\`
+  .icustays      — subject_id, hadm_id, stay_id, first_careunit, last_careunit, intime, outtime, los
+  .chartevents   — subject_id, hadm_id, stay_id, itemid, charttime, value, valuenum, valueuom, warning
+  .d_items       — itemid, label, category, unitname
+
+Notes:
+- Billing project is set automatically; do NOT include project in FROM clauses
+- Dates are shifted for de-identification — use relative comparisons, not absolute dates
+- anchor_year_group is a string like "2010 - 2019", not a year integer
+- DATETIME columns (admittime, charttime, etc.) use DATETIME functions, not TIMESTAMP
+- hospital_expire_flag = 1 means in-hospital death`,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sql: { type: 'string', description: 'BigQuery SQL SELECT or WITH query. Table paths must be fully qualified with backticks, e.g. `physionet-data.mimiciv_3_1_hosp.patients`.' },
+          limit: { type: 'number', description: 'Max rows to return (default 500, max 1000).' },
+        },
+        required: ['sql'],
+      },
+    },
+    {
       name: 'mimic_icu',
       description: 'Get ICU stay summary for a MIMIC-IV patient, including care unit, length of stay, and latest vital signs (HR, BP, SpO2, temperature, GCS).',
       inputSchema: {
@@ -401,6 +475,7 @@ server.setRequestHandler(CallToolRequestSchema, async req => {
     else if (name === 'mimic_labs') result = await mimicLabs(args)
     else if (name === 'mimic_cohort') result = await mimicCohort(args)
     else if (name === 'mimic_icu') result = await mimicIcu(args)
+    else if (name === 'mimic_sql') result = await mimicSql(args)
     else throw new Error(`Unknown tool: ${name}`)
 
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
