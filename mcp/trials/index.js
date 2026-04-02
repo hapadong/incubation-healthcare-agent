@@ -88,19 +88,30 @@ async function trialsSearch({ condition, intervention, phase, status = 'RECRUITI
   if (condition) params['query.cond'] = condition
   if (intervention) params['query.intr'] = intervention
 
-  // Phase filter: PHASE1, PHASE2, PHASE3, PHASE4, EARLY_PHASE1, NA
-  if (phase) params['filter.phase'] = phase.toUpperCase().replace(/\s+/g, '_')
-
-  // Status filter: RECRUITING, NOT_YET_RECRUITING, ACTIVE_NOT_RECRUITING, COMPLETED, etc.
+  // Status filter via API (supported)
   if (status) params['filter.overallStatus'] = status.toUpperCase()
 
+  // Fetch more than needed when phase filter requested, since phase must be
+  // filtered client-side (filter.phase is not a valid API parameter)
+  const phaseNorm = phase ? phase.toUpperCase().replace(/[\s-]/g, '') : null
+  if (phaseNorm) params.pageSize = String(Math.min(max_results * 3, 60))
+
   const data = JSON.parse(await get(apiUrl('/studies', params)))
-  const studies = data.studies ?? []
+  let studies = data.studies ?? []
+
+  // Client-side phase filter
+  if (phaseNorm) {
+    studies = studies.filter(study => {
+      const phases = study.protocolSection?.designModule?.phases ?? []
+      return phases.some(p => p.toUpperCase().replace(/[\s-]/g, '') === phaseNorm)
+    }).slice(0, max_results)
+  }
 
   return {
     total: data.totalCount ?? studies.length,
     returned: studies.length,
     status_filter: status,
+    phase_filter: phase ?? null,
     note: studies.length < (data.totalCount ?? 0)
       ? `Showing ${studies.length} of ${data.totalCount} matching trials. Narrow with phase, intervention, or status filters.`
       : undefined,
@@ -189,11 +200,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           condition: {
             type: 'string',
-            description: 'Disease or condition to search for. Use medical terminology: "non-small cell lung cancer", "EGFR mutation", "type 2 diabetes". Supports free text and MeSH-style terms.',
+            description: 'Disease, condition, or biomarker to search for. Include mutations/biomarkers here alongside the disease: "non-small cell lung cancer KRAS mutation", "EGFR exon 19 deletion NSCLC", "HER2-positive breast cancer". Supports free text.',
           },
           intervention: {
             type: 'string',
-            description: 'Drug, device, or procedure of interest. E.g. "osimertinib", "immunotherapy", "CAR-T". Optional.',
+            description: 'Drug, device, or procedure of interest. Use for specific treatments only: "osimertinib", "immunotherapy", "CAR-T". Do NOT put biomarkers here. Optional.',
           },
           phase: {
             type: 'string',
