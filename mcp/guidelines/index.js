@@ -212,7 +212,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           year_from: {
             type: 'number',
-            description: 'Only return guidelines from this year onward. E.g. 2020. Optional.',
+            description: 'Only return guidelines from this year onward. E.g. 2020. ONLY set this if the user explicitly specifies a year or date range. Do NOT infer it from words like "current", "recent", or "latest" — omit it and let the results sort by date instead.',
           },
           max_results: {
             type: 'number',
