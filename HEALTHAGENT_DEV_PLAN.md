@@ -101,10 +101,13 @@ healthagent "hello"
 
 ---
 
-## Phase 1 — Compliance Layer
+## Phase 1 — Compliance Layer ✅ DONE
 **Goal:** Prevent PHI from leaking to external services + append-only audit trail
-**Duration:** ~1 week
-**Exit criteria:** All external tool calls are scanned; every action is logged locally
+**Exit criteria met:**
+- External tool calls scanned for structural PHI (SSN, email, phone) — blocks on detection
+- De-identification instruction hardcoded in system prompt — model strips identity, preserves clinical context
+- JSONL audit log at `~/.healthagent/audit/YYYY-MM-DD.jsonl` — confirmed working
+- All agents in session covered by session-level hook registration (no per-agent wiring)
 
 ### Design principle
 
@@ -484,8 +487,8 @@ healthagent/
 
 | Phase | Work | Duration | Deliverable |
 |-------|------|----------|-------------|
-| 0 — Strip & Harden | Remove telemetry, OAuth, Anthropic-specific deps; add model API abstraction | 1 week | Clean, org-deployable base |
-| 1 — Compliance Layer | PHI scanner hook, local audit log, consent gate | 1 week | Every action logged, PHI flagged |
+| 0 — Strip & Harden ✅ | Remove telemetry, OAuth, Anthropic-specific deps; add model API abstraction | 1 week | Clean, org-deployable base |
+| 1 — Compliance Layer ✅ | PHI guardrail on external calls, de-id in system prompt, JSONL audit log | 1 week | External calls scanned, every action logged |
 | 2 — Clinical MCP Servers | 5 servers, all free APIs, no per-org licenses | 2 weeks | PubMed, trials, drugs, coding, guidelines |
 | 3 — Clinical Skills | 4 skill workflows composing MCP tools | 1 week | /lit-review, /drug-check, /trial-match, /visit-prep |
 | 4 — POC Demo | End-to-end integration, batch + server modes | 1 week | Demo-ready |
