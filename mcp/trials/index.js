@@ -224,7 +224,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'trial_detail',
-      description: 'Fetch full details for a single clinical trial by NCT ID. Returns full eligibility criteria text, all interventions, primary outcomes, sponsor, and up to 10 site locations with contacts. Use after trials_search to get full protocol details.',
+      description: 'Fetch full details for a single clinical trial by NCT ID. Returns full eligibility criteria text, all interventions, primary outcomes, sponsor, and up to 10 site locations with contacts. IMPORTANT: Only call this for 1-2 specific trials the user wants details on — do NOT call this for every result from trials_search. The search results already contain enough information to present a summary list.',
       inputSchema: {
         type: 'object',
         properties: {
