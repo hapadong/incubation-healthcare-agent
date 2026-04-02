@@ -11,6 +11,10 @@
       "command": "node",
       "args": ["mcp/trials/index.js"]
     },
+    "coding": {
+      "command": "node",
+      "args": ["mcp/coding/index.js"]
+    },
     "drugs": {
       "command": "node",
       "args": ["mcp/drugs/index.js"],
