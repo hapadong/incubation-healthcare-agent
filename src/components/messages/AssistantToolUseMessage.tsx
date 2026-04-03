@@ -88,7 +88,11 @@ export function AssistantToolUseMessage(t0) {
   }
   const parsed = t1;
   if (!parsed) {
-    logError(new Error(tools ? `Tool ${param.name} not found` : `Tools array is undefined for tool ${param.name}`));
+    // MCP tools connect asynchronously — suppress transient "not found" noise.
+    // Non-MCP tools are always registered synchronously, so those are real bugs.
+    if (!param.name.startsWith('mcp__')) {
+      logError(new Error(tools ? `Tool ${param.name} not found` : `Tools array is undefined for tool ${param.name}`));
+    }
     return null;
   }
   const {

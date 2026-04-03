@@ -356,7 +356,7 @@ export function toolMatchesName(
  * Finds a tool by name or alias from a list of tools.
  */
 export function findToolByName(tools: Tools, name: string): Tool | undefined {
-  return tools.find(t => toolMatchesName(t, name))
+  return tools?.find(t => toolMatchesName(t, name))
 }
 
 export type Tool<

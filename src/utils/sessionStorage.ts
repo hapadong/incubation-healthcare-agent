@@ -75,7 +75,6 @@ import {
   isEnvTruthy,
   isHealthAgentMode,
 } from './envUtils.js'
-import { findTranscriptPath } from './healthagent/sessionStore.js'
 import { isFsInaccessible } from './errors.js'
 import type { FileHistorySnapshot } from './fileHistory.js'
 import { formatFileSize } from './format.js'
@@ -1087,7 +1086,7 @@ class Project {
           slug,
         }
         await this.appendEntry(transcriptMessage)
-        if (isChainParticipant(message)) {
+        if (isChainParticipant(message) && message.uuid) {
           parentUuid = message.uuid
         }
       }
@@ -2060,6 +2059,59 @@ function applySnipRemovals(messages: Map<UUID, TranscriptMessage>): void {
     removed_count: removedCount,
     relinked_count: relinkedCount,
   })
+}
+
+/**
+ * Repairs assistant messages that have parentUuid=null/undefined due to a
+ * now-fixed write-path bug: typeless messages (no uuid) incorrectly advanced
+ * the parentUuid cursor to `undefined`, causing all subsequent assistant
+ * entries to be written without a parentUuid — making each assistant an
+ * isolated root and breaking buildConversationChain.
+ *
+ * Detection: an assistant with no parentUuid that has at least one user
+ * message pointing to it as parent (so it IS part of the chain, just
+ * missing its own link). Repair: set parentUuid to the UUID of the
+ * nearest predecessor in JSONL insertion order that has a uuid.
+ *
+ * Safe to apply unconditionally — legitimately-rootless messages (compact
+ * boundaries, first message of a fresh session) are also parentUuid=null
+ * but never have child user messages pointing to them yet.
+ *
+ * Mutates the Map in place. O(n) pass.
+ */
+function repairOrphanedAssistants(messages: Map<UUID, TranscriptMessage>): void {
+  // Build set of assistant UUIDs that have at least one user child.
+  const assistantsWithUserChild = new Set<UUID>()
+  for (const msg of messages.values()) {
+    if (msg.type === 'user' && msg.parentUuid && messages.has(msg.parentUuid)) {
+      const parent = messages.get(msg.parentUuid)!
+      if (parent.type === 'assistant') {
+        assistantsWithUserChild.add(msg.parentUuid)
+      }
+    }
+  }
+
+  logForDebugging(`[repairOrphanedAssistants] ${assistantsWithUserChild.size} orphaned assistants to repair`)
+
+  // Walk in insertion order (= JSONL file order), track last UUID seen.
+  // When we find an orphaned assistant, link it to lastUUID.
+  let lastUUID: UUID | null = null
+  let repaired = 0
+  for (const [uuid, msg] of messages) {
+    if (
+      !msg.parentUuid &&
+      msg.type === 'assistant' &&
+      assistantsWithUserChild.has(uuid) &&
+      lastUUID !== null
+    ) {
+      messages.set(uuid, { ...msg, parentUuid: lastUUID })
+      repaired++
+    }
+    lastUUID = uuid
+  }
+  if (repaired > 0) {
+    logForDebugging(`[repairOrphanedAssistants] repaired ${repaired} assistant parent links`)
+  }
 }
 
 /**
@@ -3727,6 +3779,7 @@ export async function loadTranscriptFile(
 
   applyPreservedSegmentRelinks(messages)
   applySnipRemovals(messages)
+  repairOrphanedAssistants(messages)
 
   // Compute leaf UUIDs once at load time
   // Only user/assistant messages should be considered as leaves for anchoring resume.
@@ -3854,16 +3907,34 @@ async function loadSessionFile(sessionId: UUID): Promise<{
 }> {
   let sessionFile: string
   if (isHealthAgentMode()) {
-    // In HealthAgent mode sessions are bucketed by date — use the index (or
-    // scan fallback) so cross-day resumes work correctly.
+    // HealthAgent sessions are date-bucketed. Try the session index first
+    // (O(1)), fall back to a directory scan for pre-index sessions, and
+    // finally fall back to the standard project dir (today's bucket).
+    const { findTranscriptPath } = await import('./healthagent/sessionStore.js')
     const resolved = await findTranscriptPath(sessionId)
-    sessionFile = resolved ?? join(getProjectDir(getOriginalCwd()), `${sessionId}.jsonl`)
+    if (resolved) {
+      try {
+        await stat(resolved)
+        logForDebugging(`[loadSessionFile] found via index/scan: ${resolved}`)
+        sessionFile = resolved
+      } catch {
+        // Index returned a path that doesn't exist on disk — session was
+        // registered but transcript was never written (e.g. zero-message
+        // sessions). Fall through to the standard path.
+        logForDebugging(`[loadSessionFile] index path missing: ${resolved}, trying standard path`)
+        sessionFile = join(getSessionProjectDir() ?? getProjectDir(getOriginalCwd()), `${sessionId}.jsonl`)
+      }
+    } else {
+      logForDebugging(`[loadSessionFile] not in index/scan, using standard path`)
+      sessionFile = join(getSessionProjectDir() ?? getProjectDir(getOriginalCwd()), `${sessionId}.jsonl`)
+    }
   } else {
     sessionFile = join(
       getSessionProjectDir() ?? getProjectDir(getOriginalCwd()),
       `${sessionId}.jsonl`,
     )
   }
+  logForDebugging(`[loadSessionFile] loading ${sessionFile}`)
   return loadTranscriptFile(sessionFile)
 }
 
@@ -3915,6 +3986,7 @@ export async function getLastSessionLog(
     contextCollapseCommits,
     contextCollapseSnapshot,
   } = await loadSessionFile(sessionId)
+  logForDebugging(`[getLastSessionLog] messages.size=${messages.size} for session ${sessionId}`)
   if (messages.size === 0) return null
   // Prime getSessionMessages cache so recordTranscript (called after REPL
   // mount on --resume) skips a second full file load. -170~227ms on large sessions.
@@ -4381,6 +4453,10 @@ export async function loadAllSubagentTranscriptsFromDisk(): Promise<{
 // Exported so useLogMessages can sync-compute the last loggable uuid
 // without awaiting recordTranscript's return value (race-free hint tracking).
 export function isLoggableMessage(m: Message): boolean {
+  // Messages with no type (e.g. empty objects accidentally in the array) must
+  // not reach the JSONL — they have no uuid either, which would break the
+  // parentUuid chain and make all subsequent assistant messages unchainable.
+  if (!m.type) return false
   if (m.type === 'progress') return false
   // IMPORTANT: We deliberately filter out most attachments for non-ants because
   // they have sensitive info for training that we don't want exposed to the public.
