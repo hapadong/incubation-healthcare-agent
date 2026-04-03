@@ -29,7 +29,7 @@ import { getCurrentProjectConfig, getGlobalConfig } from './utils/config.js'
 import { logForDiagnosticsNoPII } from './utils/diagLogs.js'
 import { env } from './utils/env.js'
 import { envDynamic } from './utils/envDynamic.js'
-import { isBareMode, isEnvTruthy } from './utils/envUtils.js'
+import { getHealthAgentHomeDir, isBareMode, isEnvTruthy, isHealthAgentMode } from './utils/envUtils.js'
 import { errorMessage } from './utils/errors.js'
 import { findCanonicalGitRoot, findGitRoot, getIsGit } from './utils/git.js'
 import { initializeFileChangedWatcher } from './utils/hooks/fileChangedWatcher.js'
@@ -65,6 +65,13 @@ export async function setup(
   messagingSocketPath?: string,
 ): Promise<void> {
   logForDiagnosticsNoPII('info', 'setup_started')
+
+  // Redirect all Claude config (debug logs, plugins, settings) to ~/.healthagent
+  // when running in HealthAgent mode. Must happen before any memoized path
+  // functions are called so every subsystem sees the correct home directory.
+  if (isHealthAgentMode() && !process.env.CLAUDE_CONFIG_DIR) {
+    process.env.CLAUDE_CONFIG_DIR = getHealthAgentHomeDir()
+  }
 
   // Check for Node.js version < 18
   const nodeVersion = process.version.match(/^v(\d+)\./)?.[1]
