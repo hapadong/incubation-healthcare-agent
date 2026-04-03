@@ -1981,6 +1981,7 @@ export function REPL({
   // where messages are passed as props rather than through the resume callback
   useEffect(() => {
     if (initialMessages && initialMessages.length > 0) {
+      logForDebugging(`[resume:mount] ${initialMessages.length} messages, isFullscreen=${isFullscreenEnvEnabled()}`);
       restoreReadFileState(initialMessages, getOriginalCwd());
       void restoreRemoteAgentTasks({
         abortController: new AbortController(),

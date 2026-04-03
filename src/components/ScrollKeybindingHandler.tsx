@@ -471,7 +471,10 @@ export function ScrollKeybindingHandler({
       // scroll would be a no-op. Lets a child component's handler take
       // the wheel event instead (e.g. Settings Config's list navigation
       // inside the centered Modal, where the paginated slice always fits).
-      if (!s_2 || s_2.getScrollHeight() <= s_2.getViewportHeight()) return false;
+      if (!s_2 || s_2.getScrollHeight() <= s_2.getViewportHeight()) {
+        logForDebugging(`[scroll:lineUp] NO-OP scrollH=${s_2?.getScrollHeight()} viewportH=${s_2?.getViewportHeight()}`);
+        return false;
+      }
       wheelAccel.current ??= initAndLogWheelAccel();
       scrollUp(s_2, computeWheelStep(wheelAccel.current, -1, performance.now()));
       onScroll?.(false, s_2);
@@ -488,6 +491,7 @@ export function ScrollKeybindingHandler({
     'scroll:top': () => {
       const s_4 = scrollRef.current;
       if (!s_4) return;
+      logForDebugging(`[scroll:top] scrollH=${s_4.getScrollHeight()} viewportH=${s_4.getViewportHeight()} scrollTop=${s_4.getScrollTop()} isSticky=${s_4.isSticky()}`);
       translateSelectionForJump(s_4, -(s_4.getScrollTop() + s_4.getPendingDelta()));
       s_4.scrollTo(0);
       onScroll?.(false, s_4);
