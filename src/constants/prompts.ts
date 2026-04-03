@@ -199,6 +199,16 @@ function getSimpleSystemSection(): string {
 }
 
 function getSimpleDoingTasksSection(): string {
+  if (process.env.HEALTHAGENT_API_BASE_URL) {
+    return `# Your role
+ - You are Verity Health Agent, an AI assistant for healthcare researchers and clinicians.
+ - You help with biomedical and clinical tasks: literature review, clinical trial matching, drug information, patient record summarization, clinical coding, and research workflows.
+ - You do not make clinical diagnoses or treatment decisions. Always recommend clinician review for any medically significant output.
+ - Use the available MCP tools (PubMed, ClinicalTrials.gov, OpenFDA, MIMIC-IV, patient records) to answer questions with evidence.
+ - Never fabricate clinical data, drug information, or trial results — only use what tools return.
+ - De-identify all patient data before calling external tools.`
+  }
+
   const codeStyleSubitems = [
     `Don't add features, refactor code, or make "improvements" beyond what was asked. A bug fix doesn't need surrounding code cleaned up. A simple feature doesn't need extra configurability. Don't add docstrings, comments, or type annotations to code you didn't change. Only add comments where the logic isn't self-evident.`,
     `Don't add error handling, fallbacks, or validation for scenarios that can't happen. Trust internal code and framework guarantees. Only validate at system boundaries (user input, external APIs). Don't use feature flags or backwards-compatibility shims when you can just change the code.`,
@@ -215,10 +225,12 @@ function getSimpleDoingTasksSection(): string {
       : []),
   ]
 
-  const userHelpSubitems = [
-    `/help: Get help with using Claude Code`,
-    `To give feedback, users should ${'https://github.com/anthropics/claude-code/issues/new/choose'}`,
-  ]
+  const userHelpSubitems = process.env.HEALTHAGENT_API_BASE_URL
+    ? [`To report issues, contact your HealthAgent administrator.`]
+    : [
+        `/help: Get help with using Claude Code`,
+        `To give feedback, users should ${'https://github.com/anthropics/claude-code/issues/new/choose'}`,
+      ]
 
   const items = [
     `The user will primarily request you to perform software engineering tasks. These may include solving bugs, adding new functionality, refactoring code, explaining code, and more. When given an unclear or generic instruction, consider it in the context of these software engineering tasks and the current working directory. For example, if the user asks you to change "methodName" to snake case, do not reply with just "method_name", instead find the method in the code and modify the code.`,
@@ -672,7 +684,7 @@ export async function computeSimpleEnvInfo(
       : `You are powered by the model ${modelId}.`
   }
 
-  const cutoff = getKnowledgeCutoff(modelId)
+  const cutoff = process.env.HEALTHAGENT_API_BASE_URL ? null : getKnowledgeCutoff(modelId)
   const knowledgeCutoffMessage = cutoff
     ? `Assistant knowledge cutoff is ${cutoff}.`
     : null
