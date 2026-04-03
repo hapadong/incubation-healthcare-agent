@@ -69,7 +69,13 @@ import { updateSessionName } from './concurrentSessions.js'
 import { getCwd } from './cwd.js'
 import { logForDebugging } from './debug.js'
 import { logForDiagnosticsNoPII } from './diagLogs.js'
-import { getClaudeConfigHomeDir, isEnvTruthy } from './envUtils.js'
+import {
+  getClaudeConfigHomeDir,
+  getHealthAgentHomeDir,
+  isEnvTruthy,
+  isHealthAgentMode,
+} from './envUtils.js'
+import { findTranscriptPath } from './healthagent/sessionStore.js'
 import { isFsInaccessible } from './errors.js'
 import type { FileHistorySnapshot } from './fileHistory.js'
 import { formatFileSize } from './format.js'
@@ -196,6 +202,9 @@ export function isEphemeralToolProgress(dataType: unknown): boolean {
 }
 
 export function getProjectsDir(): string {
+  if (isHealthAgentMode()) {
+    return join(getHealthAgentHomeDir(), 'sessions')
+  }
   return join(getClaudeConfigHomeDir(), 'projects')
 }
 
@@ -433,9 +442,24 @@ export function isCustomTitleEnabled(): boolean {
 // string; homedir/env/regex are all session-invariant so the result is
 // stable for a given input. Worktree switches just change the key — no
 // cache clear needed.
-export const getProjectDir = memoize((projectDir: string): string => {
+//
+// HealthAgent mode bypasses this memoized path entirely — clinical sessions
+// are not tied to a cwd so the memoize key is meaningless.  The HealthAgent
+// path is a plain function call, which is fine since it only does string ops.
+const _getProjectDirMemoized = memoize((projectDir: string): string => {
   return join(getProjectsDir(), sanitizePath(projectDir))
 })
+
+export function getProjectDir(projectDir: string): string {
+  if (isHealthAgentMode()) {
+    // Clinical sessions are not tied to a cwd — bucket by today's date.
+    // getSessionId() is read fresh so /clear (which calls regenerateSessionId)
+    // immediately starts a new bucket on the correct date.
+    const today = new Date().toISOString().slice(0, 10)
+    return join(getProjectsDir(), today)
+  }
+  return _getProjectDirMemoized(projectDir)
+}
 
 let project: Project | null = null
 let cleanupRegistered = false
@@ -3828,10 +3852,18 @@ async function loadSessionFile(sessionId: UUID): Promise<{
   contextCollapseCommits: ContextCollapseCommitEntry[]
   contextCollapseSnapshot: ContextCollapseSnapshotEntry | undefined
 }> {
-  const sessionFile = join(
-    getSessionProjectDir() ?? getProjectDir(getOriginalCwd()),
-    `${sessionId}.jsonl`,
-  )
+  let sessionFile: string
+  if (isHealthAgentMode()) {
+    // In HealthAgent mode sessions are bucketed by date — use the index (or
+    // scan fallback) so cross-day resumes work correctly.
+    const resolved = await findTranscriptPath(sessionId)
+    sessionFile = resolved ?? join(getProjectDir(getOriginalCwd()), `${sessionId}.jsonl`)
+  } else {
+    sessionFile = join(
+      getSessionProjectDir() ?? getProjectDir(getOriginalCwd()),
+      `${sessionId}.jsonl`,
+    )
+  }
   return loadTranscriptFile(sessionFile)
 }
 

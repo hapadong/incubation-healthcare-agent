@@ -1,7 +1,7 @@
 import { spawnSync } from 'child_process'
 import { getIsInteractive } from '../bootstrap/state.js'
 import { logForDebugging } from './debug.js'
-import { isEnvDefinedFalsy, isEnvTruthy } from './envUtils.js'
+import { isEnvDefinedFalsy, isEnvTruthy, isHealthAgentMode } from './envUtils.js'
 import { execFileNoThrow } from './execFileNoThrow.js'
 
 let loggedTmuxCcDisable = false
@@ -125,6 +125,9 @@ export function isFullscreenEnvEnabled(): boolean {
     }
     return false
   }
+  // HealthAgent needs fullscreen for virtual scroll, PgUp/PgDn, and proper
+  // resume rendering.  Equivalent to user setting CLAUDE_CODE_NO_FLICKER=1.
+  if (isHealthAgentMode()) return true
   return process.env.USER_TYPE === 'ant'
 }
 

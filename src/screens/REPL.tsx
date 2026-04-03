@@ -1987,6 +1987,10 @@ export function REPL({
         getAppState: () => store.getState(),
         setAppState
       });
+      // Pin scroll to bottom so the most recent message is visible on resume.
+      // Without this, scroll defaults to top and the user sees the beginning
+      // of the conversation instead of where they left off.
+      repinScroll();
     }
     // Only run on mount - initialMessages shouldn't change during component lifetime
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -371,6 +371,15 @@ export async function setup(
       ).catch(err =>
         console.error('[HealthAgent] Failed to load compliance hooks:', err),
       ) // Register PHI guardrail + audit logger for Verity Health Agent
+
+      // Register this session in the date-bucketed index so --resume can find
+      // it across days without scanning directories.
+      import('./utils/healthagent/sessionStore.js').then(async m => {
+        const { getSessionId } = await import('./bootstrap/state.js')
+        await m.getSessionStore().registerSession(getSessionId())
+      }).catch(err =>
+        console.error('[HealthAgent] Failed to register session in index:', err),
+      )
     }
     if (feature('TEAMMEM')) {
       void import('./services/teamMemorySync/watcher.js').then(m =>

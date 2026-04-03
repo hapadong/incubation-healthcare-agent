@@ -10,6 +10,7 @@ import {
   getSessionId,
   isSessionPersistenceDisabled,
 } from '../bootstrap/state.js'
+import { isHealthAgentMode } from './envUtils.js'
 import instances from '../ink/instances.js'
 import {
   DISABLE_KITTY_KEYBOARD,
@@ -169,10 +170,11 @@ function printResumeHint(): void {
         resumeArg = sessionId
       }
 
+      const cliName = isHealthAgentMode() ? 'ha' : 'claude'
       writeSync(
         1,
         chalk.dim(
-          `\nResume this session with:\nclaude --resume ${resumeArg}\n`,
+          `\nResume this session with:\n${cliName} --resume ${resumeArg}\n`,
         ),
       )
       resumeHintPrinted = true

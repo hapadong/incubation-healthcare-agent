@@ -18,6 +18,29 @@ export function getTeamsDir(): string {
 }
 
 /**
+ * True when running as HealthAgent (HEALTHAGENT_API_BASE_URL is set).
+ * Used to gate HealthAgent-specific storage paths and session ID format.
+ */
+export function isHealthAgentMode(): boolean {
+  return Boolean(process.env.HEALTHAGENT_API_BASE_URL)
+}
+
+/**
+ * Base directory for all HealthAgent data.
+ * Override via HEALTHAGENT_HOME env var (useful for testing).
+ * Future: when SSO lands, remote stores will use this as the local cache root.
+ */
+export const getHealthAgentHomeDir = memoize(
+  (): string => {
+    return (
+      process.env.HEALTHAGENT_HOME ?? join(homedir(), '.healthagent')
+    ).normalize('NFC')
+  },
+  () => process.env.HEALTHAGENT_HOME,
+)
+
+
+/**
  * Check if NODE_OPTIONS contains a specific flag.
  * Splits on whitespace and checks for exact match to avoid false positives.
  */
