@@ -243,17 +243,29 @@ Azure OpenAI.
 **Impact:** Clinician steps away mid-session, comes back to a summary of what happened.
 **Effort:** ~4 hours.
 
-### 6.5 Multi-Agent / Swarm *(already functional)*
+### 6.5 Multi-Agent / Swarm — Clinical Team Review ✅ DONE
 
-`AgentTool`, `TeamCreateTool`, and in-process sub-agent spawning were never removed —
-they are active in the tools registry today. When the model decides to spawn a sub-agent
-(e.g. to run a drug check while the main agent searches trials), it already can.
+**Design:** Blocking parallel dispatch. User waits for all agents to complete (~2-5 min).
+No background async — keeps UX simple and cost predictable.
 
-What was removed in Phase 0 was the **visual multi-pane layout** only — the iTerm2 and
-tmux backends that displayed each sub-agent in a separate terminal split. That is cosmetic.
-The functional multi-agent capability is intact.
+**Clinical model:** Cancer hospital roles. Each role brings an independent perspective;
+main agent synthesizes. Roles defined as `.md` files in `.claude/agents/` — no code change
+needed to add or modify a role.
 
-No work needed. ✅
+**Agents defined (13):**
+- Physicians: `medical_oncologist`, `surgical_oncologist`, `radiation_oncologist`,
+  `pathologist`, `radiologist`, `precision_oncologist`, `palliative_care`
+- Nursing: `oncology_nurse`, `nurse_navigator`
+- Allied health: `oncology_pharmacist`, `social_worker`, `genetic_counselor`,
+  `care_coordinator`
+
+**Swarms gate:** `isAgentSwarmsEnabled()` now returns `true` when `HEALTHAGENT_API_BASE_URL`
+is set (i.e., always in HealthAgent mode). `TeamCreateTool` and `TeamDeleteTool` are active.
+The removed iTerm2/tmux visual backends are cosmetic only — in-process coordinator works.
+
+**Entry point:** `/team-review` — `local-jsx` command that presents a `SelectMulti` checkbox
+list of all custom (non-built-in) agents. User selects relevant specialists, confirms, and the
+main agent is dispatched with a structured prompt to run TeamCreate and synthesize results.
 
 ---
 
@@ -386,5 +398,5 @@ healthagent/
 | 3 — Clinical Skills | 4 skill workflows | ✅ Done |
 | 4 — Session Stability | Cross-day resume, parentUuid repair, config isolation | ✅ Done |
 | 5 — Patient Summary | FHIR-aligned schema v1, allergies/vitals/procedures | ✅ Done |
-| 6 — Restorable Features | Session naming, rewind, voice, away summary | Planned |
+| 6 — Restorable Features | Session naming, rewind, away summary, clinical team review (13 agents, /team-review) | ✅ Done |
 | 7 — Local Web UI | Next.js thin shell over local CLI | Planned |

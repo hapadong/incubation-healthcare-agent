@@ -17,6 +17,7 @@ import keybindings from './commands/keybindings/index.js'
 import mcp from './commands/mcp/index.js'
 import resume from './commands/resume/index.js'
 import rewind from './commands/rewind/index.js'
+import teamReview from './commands/team-review/index.js'
 import review, { ultrareview } from './commands/review.js'
 import session from './commands/session/index.js'
 import skills from './commands/skills/index.js'
@@ -131,6 +132,7 @@ const COMMANDS = memoize((): Command[] => [
   reloadPlugins,
   resume,
   rewind,
+  teamReview,
   session,
   skills,
   stats,
