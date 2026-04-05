@@ -4,7 +4,7 @@ const teamReview = {
   type: 'local-jsx',
   name: 'team-review',
   description: 'Select clinical specialists to review the current patient case as a team',
-  argumentHint: '',
+  argumentHint: '[clinical question]',
   load: () => import('./teamReview.js'),
 } satisfies Command
 
