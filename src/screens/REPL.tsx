@@ -33,7 +33,7 @@ import { updateLastInteractionTime, getLastInteractionTime, getOriginalCwd, getP
 import { asSessionId, asAgentId } from '../types/ids.js';
 import { logForDebugging } from '../utils/debug.js';
 import { QueryGuard } from '../utils/QueryGuard.js';
-import { isEnvTruthy } from '../utils/envUtils.js';
+import { isEnvTruthy, isHealthAgentMode } from '../utils/envUtils.js';
 import { formatTokens, truncateToWidth } from '../utils/format.js';
 import { consumeEarlyInput } from '../utils/earlyInput.js';
 import { setMemberActive } from '../utils/swarm/teamHelpers.js';
@@ -2695,8 +2695,21 @@ export function REPL({
       // None of these are the user's topic; wait for real prose.
       if (text && !text.startsWith(`<${LOCAL_COMMAND_STDOUT_TAG}>`) && !text.startsWith(`<${COMMAND_MESSAGE_TAG}>`) && !text.startsWith(`<${COMMAND_NAME_TAG}>`) && !text.startsWith(`<${BASH_INPUT_TAG}>`)) {
         haikuTitleAttemptedRef.current = true;
-        void generateSessionTitle(text, new AbortController().signal).then(title => {
-          if (title) setHaikuTitle(title);else haikuTitleAttemptedRef.current = false;
+        void generateSessionTitle(text, new AbortController().signal).then(async title => {
+          if (title) {
+            setHaikuTitle(title);
+            // Persist to session index so it appears in session list and future web UI
+            if (isHealthAgentMode()) {
+              try {
+                const { getSessionStore } = await import('../utils/healthagent/sessionStore.js')
+                await getSessionStore().updateSessionTitle(getSessionId(), title)
+              } catch {
+                // non-fatal — title is still shown in terminal
+              }
+            }
+          } else {
+            haikuTitleAttemptedRef.current = false;
+          }
         }, () => {
           haikuTitleAttemptedRef.current = false;
         });

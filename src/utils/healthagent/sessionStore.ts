@@ -48,7 +48,7 @@ export interface SessionMeta {
 }
 
 // Shape of ~/.healthagent/sessions/index.json
-type SessionIndexFile = Record<string, { date: string; startedAt: string }>
+type SessionIndexFile = Record<string, { date: string; startedAt: string; title?: string }>
 
 /**
  * Core session store interface.
@@ -76,6 +76,12 @@ export interface HealthAgentSessionStore {
    * Remote store implementations may return a local cache path.
    */
   transcriptPath(sessionId: string, date: string): string
+
+  /**
+   * Persist an auto-generated title for a session.
+   * No-op if the session is not in the index.
+   */
+  updateSessionTitle(sessionId: string, title: string): Promise<void>
 
   /**
    * List sessions, newest first.
@@ -123,6 +129,13 @@ export class LocalDiskSessionStore implements HealthAgentSessionStore {
     await this.writeIndex(index)
   }
 
+  async updateSessionTitle(sessionId: string, title: string): Promise<void> {
+    const index = await this.readIndex()
+    if (!index[sessionId]) return // session not in index — skip
+    index[sessionId] = { ...index[sessionId]!, title }
+    await this.writeIndex(index)
+  }
+
   async findSessionDate(sessionId: string): Promise<string | undefined> {
     const index = await this.readIndex()
     return index[sessionId]?.date
@@ -142,6 +155,7 @@ export class LocalDiskSessionStore implements HealthAgentSessionStore {
       sessionId,
       date: meta.date,
       startedAt: meta.startedAt,
+      title: meta.title,
     }))
 
     if (opts.date) {
