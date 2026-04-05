@@ -217,19 +217,22 @@ Had zero Anthropic API dependency. Just needs the command re-registered.
 **Impact:** Lets clinicians backtrack within a session without losing context.
 **Effort:** ~30 minutes.
 
-### 6.3 Voice Input *(medium effort, high clinical value)*
+### 6.3 Voice Input *(DEFERRED — cross-platform dependency problem)*
 
 UI skeleton remains: `src/context/voice.tsx`, `VoiceIndicator.tsx`, `VoiceModeNotice.tsx`,
 `useVoiceIntegration.tsx`, `voiceKeyterms.ts`. The STT backend (`voiceStreamSTT.js`) is
 a dead stub pointing to Anthropic's private WebSocket.
 
-Replace with: Whisper API, Deepgram, or Azure Speech Services.
-The `useVoice.ts` hook (1144 lines, deleted) needs rewriting against the new provider —
-the architecture is clear from the deleted file.
+**Why deferred:** Local Whisper is the right backend (audio must not leave the machine for
+clinical use), but it requires SoX for audio capture + whisper.cpp or Python Whisper CLI —
+each with different install paths on macOS, Windows, and Linux. Bundling adds ~200MB and
+significant packaging complexity. Prerequisite-based approach works on macOS but is messy
+on Windows. Not worth the cross-platform maintenance burden until voice is validated as a
+feature users actually need.
 
-**Clinical value:** Dictate patient notes and queries instead of typing.
-Especially useful in clinic settings where hands are occupied.
-**Effort:** 1-2 days.
+**Revisit when:** Early users on macOS confirm they want voice AND the user base is
+predominantly macOS. At that point, ship macOS-only with a Homebrew install requirement
+(`brew install sox`) and gate with a clear "macOS only" notice.
 
 ### 6.4 Away Summary *(small effort)*
 
