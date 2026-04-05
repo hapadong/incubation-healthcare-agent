@@ -268,12 +268,8 @@ export function useMultiSelectState<T>({
 
       // Handle Tab to move forward
       if (key.tab && !key.shift) {
-        if (
-          submitButtonText &&
-          onSubmit &&
-          navigation.focusedValue === lastOptionValue &&
-          !isSubmitFocused
-        ) {
+        if (submitButtonText && onSubmit && !isSubmitFocused) {
+          // Jump directly to submit button from anywhere in the list
           setIsSubmitFocused(true)
         } else if (!isSubmitFocused) {
           navigation.focusNextOption()
@@ -285,7 +281,6 @@ export function useMultiSelectState<T>({
       if (key.tab && key.shift) {
         if (submitButtonText && onSubmit && isSubmitFocused) {
           setIsSubmitFocused(false)
-          navigation.focusOption(lastOptionValue)
         } else {
           navigation.focusPreviousOption()
         }

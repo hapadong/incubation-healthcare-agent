@@ -64,7 +64,7 @@ function TeamReviewSelector({ onDone }: { onDone: LocalJSXCommandOnDone }) {
   return (
     <Box flexDirection="column" gap={1}>
       <Text bold>Select clinical specialists for team review:</Text>
-      <Text dimColor>Space to toggle · Enter to confirm · Esc to cancel</Text>
+      <Text dimColor>↑↓ navigate · Space to toggle · Tab to jump to submit · Esc to cancel</Text>
       <SelectMulti
         options={options}
         onSubmit={handleSubmit}
