@@ -243,15 +243,17 @@ Azure OpenAI.
 **Impact:** Clinician steps away mid-session, comes back to a summary of what happened.
 **Effort:** ~4 hours.
 
-### 6.5 Multi-Agent / Swarm *(large effort, deferred)*
+### 6.5 Multi-Agent / Swarm *(already functional)*
 
-Spawned sub-agents as separate processes (iTerm2, tmux, or in-process backends).
-Model fallback referenced Opus but was just a string — fully swappable. No hard
-Anthropic API dependency in the spawn/coordination logic.
+`AgentTool`, `TeamCreateTool`, and in-process sub-agent spawning were never removed —
+they are active in the tools registry today. When the model decides to spawn a sub-agent
+(e.g. to run a drug check while the main agent searches trials), it already can.
 
-**Clinical value:** Parallel clinical workflows — one agent researches trials while
-another runs a drug check. Useful for complex multi-condition patients.
-**Effort:** Large. Defer post-v0.1.0.
+What was removed in Phase 0 was the **visual multi-pane layout** only — the iTerm2 and
+tmux backends that displayed each sub-agent in a separate terminal split. That is cosmetic.
+The functional multi-agent capability is intact.
+
+No work needed. ✅
 
 ---
 
