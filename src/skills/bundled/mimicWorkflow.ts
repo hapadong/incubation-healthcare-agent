@@ -8,36 +8,55 @@ IMPORTANT: Execute all steps yourself using the MCP tools listed below. Do NOT u
 
 ### 1. Find a matching patient (ICD-first approach)
 
-**Step 1a — Resolve ICD codes**
-Call \`icd10_search\` with the primary condition (e.g. "non-small cell lung cancer"). Take the top relevant ICD-10 codes (e.g. C34.10, C34.11, C34.12 for NSCLC).
+**Step 1a — Resolve ICD code prefixes**
+Call \`icd10_search\` with the primary condition. From the results, identify the **parent category prefix** — not individual leaf codes.
 
-If the condition has a secondary component (e.g. a mutation, comorbidity, or stage), call \`icd10_search\` again for that term.
+Critical rules for reading icd10_search results:
+- Many conditions span a whole letter-number block. Use the common prefix with LIKE, not a hand-picked IN() list.
+- Example: sepsis → A40.x and A41.x (not individual rare variants like A02.1 or A22.7). Prefix: \`'A40%'\`, \`'A41%'\`, plus severe sepsis R65.x → \`'R65%'\`
+- Example: lung cancer → C34.x → prefix \`'C34%'\`
+- Example: heart failure → I50.x → prefix \`'I50%'\`
+- If icd10_search returns only very specific or rare subtypes, widen to the parent block.
 
-**Step 1b — Query MIMIC by ICD code using SQL**
-Use \`mimic_sql\` to find patients. All table references must use backtick-quoted fully qualified names.
+If the condition has a secondary component (mutation, comorbidity, stage), call \`icd10_search\` again.
 
-For a single condition (e.g. ICD codes C34.10–C34.12):
+**Step 1b — Query MIMIC by ICD prefix using SQL**
+MIMIC-IV contains both ICD-9 and ICD-10 codes. Always cover both versions.
+
+Common ICD-9 equivalents to remember:
+- Sepsis → ICD-9: \`038.x\`, \`995.91\`, \`995.92\`
+- Lung cancer → ICD-9: \`162.x\`
+- Heart failure → ICD-9: \`428.x\`
+- COPD → ICD-9: \`491.x\`, \`492.x\`, \`496\`
+- Diabetes → ICD-9: \`250.x\`
+- Stroke → ICD-9: \`434.x\`, \`436\`
+
+Use \`LIKE\` prefix patterns (not exact IN lists) so all subtypes are captured:
 \`\`\`sql
-SELECT DISTINCT d.subject_id, d.hadm_id, di.long_title, d.icd_code
+SELECT DISTINCT d.subject_id, d.hadm_id, di.long_title, d.icd_code, d.icd_version
 FROM \`physionet-data.mimiciv_3_1_hosp.diagnoses_icd\` d
 JOIN \`physionet-data.mimiciv_3_1_hosp.d_icd_diagnoses\` di
   ON d.icd_code = di.icd_code AND d.icd_version = di.icd_version
-WHERE d.icd_code IN ('C34.10', 'C34.11', 'C34.12')
+WHERE (
+  (d.icd_version = 10 AND (d.icd_code LIKE 'A40%' OR d.icd_code LIKE 'A41%' OR d.icd_code LIKE 'R65%'))
+  OR
+  (d.icd_version = 9  AND (d.icd_code LIKE '038%' OR d.icd_code LIKE '99591' OR d.icd_code LIKE '99592'))
+)
 LIMIT 10
 \`\`\`
 
-For compound conditions (e.g. NSCLC **and** EGFR mutation — require both codes on the same patient):
+For compound conditions (e.g. NSCLC **and** EGFR mutation — require both on the same patient):
 \`\`\`sql
 SELECT DISTINCT d1.subject_id, d1.hadm_id
 FROM \`physionet-data.mimiciv_3_1_hosp.diagnoses_icd\` d1
 JOIN \`physionet-data.mimiciv_3_1_hosp.diagnoses_icd\` d2
   ON d1.subject_id = d2.subject_id AND d1.hadm_id = d2.hadm_id
-WHERE d1.icd_code IN ('C34.10', 'C34.11', 'C34.12')   -- primary condition
-  AND d2.icd_code IN ('Z15.01', 'C34.90')              -- secondary condition
+WHERE (d1.icd_version = 10 AND d1.icd_code LIKE 'C34%')   -- primary: lung cancer
+  AND (d2.icd_version = 10 AND d2.icd_code LIKE 'Z15%')   -- secondary: genetic susceptibility
 LIMIT 10
 \`\`\`
 
-For molecular markers or terms without a clean ICD code, search diagnosis descriptions:
+For molecular markers or terms without a clean ICD code, search long_title descriptions:
 \`\`\`sql
 SELECT DISTINCT d.subject_id, d.hadm_id, di.long_title, d.icd_code
 FROM \`physionet-data.mimiciv_3_1_hosp.diagnoses_icd\` d
@@ -48,8 +67,8 @@ WHERE LOWER(di.long_title) LIKE '%egfr%'
 LIMIT 10
 \`\`\`
 
-**Step 1c — Fall back to keyword if SQL returns 0 results**
-Only if the SQL query returns nothing, fall back to \`mimic_cohort\` with a broad keyword. Broaden the ICD prefix (e.g. \`LIKE 'C34%'\`) before giving up entirely.
+**Step 1c — Fall back to keyword only if SQL returns 0 results**
+If the prefix SQL returns nothing, try broadening the prefix one level, then fall back to \`mimic_cohort\` keyword search as a last resort.
 
 Pick the first patient returned with a valid subject_id.
 
