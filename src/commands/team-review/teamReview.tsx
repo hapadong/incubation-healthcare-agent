@@ -155,7 +155,16 @@ function TeamReviewSelector({
         log(`      → Calling mcp__mimic__mimic_patient (approval may be required)`)
         const numericId = Number(pid)
         const mimicText = await callMcpTool('mcp__mimic__mimic_patient', { subject_id: numericId || pid })
-        if (mimicText && mimicText.length > 50) {
+        const lowerMimic = mimicText.toLowerCase()
+        const foundInMimic = mimicText.length > 50 &&
+          !lowerMimic.includes('not found') &&
+          !lowerMimic.includes('no patient') &&
+          !lowerMimic.includes('no records') &&
+          !lowerMimic.includes('no rows') &&
+          !lowerMimic.includes('0 rows') &&
+          !lowerMimic.includes('does not exist') &&
+          !lowerMimic.includes('error')
+        if (foundInMimic) {
           log(`      ✓ Patient loaded from MIMIC.`)
           setPatientSummary(mimicText)
           setPatientSource('mimic')
