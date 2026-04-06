@@ -196,26 +196,16 @@ Patient summary accuracy is the single biggest lever on output quality.
 
 ---
 
-## Phase 6 — Restorable Features (Planned)
+## Phase 6 — Restorable Features ✅ DONE (except 6.3 deferred, 6.4 broken)
 **Goal:** Restore high-value features removed in Phase 0, replacing Claude-specific backends
-**Priority order based on clinical utility and implementation effort**
 
-### 6.1 Session Auto-Naming *(trivial effort)*
+### 6.1 Session Auto-Naming ✅ DONE
 
-`generateSessionName` called `queryHaiku` to name sessions from conversation text.
-Replace with a call to the configured Azure OpenAI endpoint. The `title` field in
-`SessionMeta` is already defined and waiting.
+Session names written to `index.json`. Sessions are identifiable at a glance in the session list.
 
-**Impact:** Makes session list in CLI and future web UI usable at a glance.
-**Effort:** ~2 hours.
+### 6.2 `/rewind` — Message Selector ✅ DONE
 
-### 6.2 `/rewind` — Message Selector *(essentially free)*
-
-Opens a message selector UI — lets the user jump back to any previous message.
-Had zero Anthropic API dependency. Just needs the command re-registered.
-
-**Impact:** Lets clinicians backtrack within a session without losing context.
-**Effort:** ~30 minutes.
+Message selector UI working. Clinicians can jump back to any previous point in a session.
 
 ### 6.3 Voice Input *(DEFERRED — cross-platform dependency problem)*
 
@@ -234,14 +224,19 @@ feature users actually need.
 predominantly macOS. At that point, ship macOS-only with a Homebrew install requirement
 (`brew install sox`) and gate with a clear "macOS only" notice.
 
-### 6.4 Away Summary *(small effort)*
+### 6.4 Away Summary ❌ BROKEN — not actually working
 
-After 5 minutes of terminal blur, generates a "while you were away" summary of what
-the agent did. Had a GrowthBook feature flag — needs gate removed, backend swapped to
-Azure OpenAI.
+Code exists (`src/services/awaySummary.ts`, `src/hooks/useAwaySummary.ts`) but the feature
+never fires. Root cause: `handleTerminalFocus` in `App.tsx` is never connected to actual
+terminal DECSET 1004 escape sequences (`\x1b[I` focus-in / `\x1b[O` focus-out). The input
+parser does not detect or dispatch these sequences, so `focusState` stays `'unknown'`
+permanently and `useAwaySummary` treats that as a no-op.
+
+**Fix needed:** Wire DECSET 1004 escape sequence parsing in the terminal input handler to call
+`setTerminalFocused(true/false)`, and emit the enable sequence (`\x1b[?1004h`) on startup.
 
 **Impact:** Clinician steps away mid-session, comes back to a summary of what happened.
-**Effort:** ~4 hours.
+**Effort:** ~2 hours.
 
 ### 6.5 Multi-Agent / Swarm — Clinical Team Review ✅ DONE
 
@@ -266,44 +261,6 @@ The removed iTerm2/tmux visual backends are cosmetic only — in-process coordin
 **Entry point:** `/team-review` — `local-jsx` command that presents a `SelectMulti` checkbox
 list of all custom (non-built-in) agents. User selects relevant specialists, confirms, and the
 main agent is dispatched with a structured prompt to run TeamCreate and synthesize results.
-
----
-
-## Phase 7 — Local Web UI (Planned)
-**Goal:** Browser interface over the local CLI — same capabilities, better UX
-**Deployment:** Each user runs `ha web` locally. Browser talks to localhost. No auth needed.
-
-```
-ha web --port 3000
-```
-
-### Architecture
-
-```
-Next.js (localhost:3000)
-  ├── GET  /api/sessions          → read ~/.healthagent/sessions/index.json
-  ├── GET  /api/sessions/:id      → parse JSONL transcript
-  ├── POST /api/chat              → spawn/pipe to local ha process
-  └── GET  /api/chat/stream       → SSE stream of ha stdout
-```
-
-The web server is a thin shell. All capabilities (tool execution, MCP integration,
-conversation memory, patient store) remain in the CLI — zero duplication.
-
-### What the UI handles
-- Session list (read from existing index.json — already structured for this)
-- Chat rendering (parse JSONL, display messages)
-- Send message (pipe to local ha process, stream response via SSE)
-- `/command` translation (intercept `/patient list` → natural language or direct MCP call)
-
-### What does NOT change
-The CLI remains the primary interface and source of truth. Every CLI improvement
-automatically appears in the web UI. The web UI is purely a display/input layer.
-
-### Not in scope for local web UI
-- Authentication (single-user local tool, no auth needed)
-- Multi-user (each clinician runs their own instance)
-- Cloud sync (future premium tier)
 
 ---
 
@@ -338,8 +295,7 @@ Batch mode becomes meaningful when:
 - Patient-facing (clinical team tool only)
 - CPT-enabled (proprietary AMA license — optional add-on in future)
 - Multi-user or centralized (local-first only in v0.1.0)
-- Voice-enabled (planned Phase 6)
-- Web UI (planned Phase 7)
+- Voice-enabled (deferred)
 
 ---
 
@@ -348,7 +304,6 @@ Batch mode becomes meaningful when:
 | Tier | Who | Architecture | Status |
 |------|-----|-------------|--------|
 | Local CLI | Individual clinician, researcher | `ha` on personal machine | v0.1.0 |
-| Local Web UI | Same user, browser preference | `ha web` on personal machine | Phase 7 |
 | Cloud Sync | Individual, multi-device | Local + optional sync to personal DB | Future |
 | Enterprise | Hospital team | Centralized server, SSO, HIPAA BAA | Future |
 
@@ -398,5 +353,4 @@ healthagent/
 | 3 — Clinical Skills | 4 skill workflows | ✅ Done |
 | 4 — Session Stability | Cross-day resume, parentUuid repair, config isolation | ✅ Done |
 | 5 — Patient Summary | FHIR-aligned schema v1, allergies/vitals/procedures | ✅ Done |
-| 6 — Restorable Features | Session naming, rewind, away summary, clinical team review (13 agents, /team-review) | ✅ Done |
-| 7 — Local Web UI | Next.js thin shell over local CLI | Planned |
+| 6 — Restorable Features | Session naming ✅, rewind ✅, team review ✅, voice deferred, away summary ❌ broken | Mostly done |
