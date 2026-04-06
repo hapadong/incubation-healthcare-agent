@@ -18,24 +18,22 @@ Show count. If empty, say "No patients saved yet."
 ---
 
 ### load <patient_id>
-The ID may be given as a bare number (e.g. "10032") or prefixed (e.g. "mimic_10032"). Normalize:
-- Bare number → prefix with "mimic_"
-- Already prefixed → use as-is
+Use the ID exactly as provided — do not add or remove any prefix.
 
-1. Call \`patient_load\` with the normalized ID.
+1. Call \`patient_load\` with the ID as-is.
 2. If found: display the full patient record in a structured format (demographics, diagnoses table, medications table, recent labs). Then state clearly:
    **"Patient [id] loaded. This patient's data is now active in this session."**
-3. If not found and ID starts with "mimic_": the patient may not be saved yet — offer to fetch from MIMIC:
-   - Call \`mimic_patient\` with the subject_id (numeric part)
+3. If not found and the ID is purely numeric: the patient may not be saved yet — offer to fetch from MIMIC:
+   - Call \`mimic_patient\` with the subject_id (the numeric ID)
    - Call \`mimic_labs\` with the same subject_id
    - Call \`mimic_icu\` with the same subject_id (catch errors — patient may have no ICU stay)
-   - Call \`patient_save\` with id, source: "mimic", and all retrieved data structured as:
+   - Call \`patient_save\` with id (the original ID as entered), source: "mimic", and all retrieved data structured as:
      - demographics: { subject_id, gender, age_at_anchor, anchor_year_group, race, admission_type, in_hospital_death }
      - diagnoses: array of { icd_code, icd_version, description, seq }
      - medications: array of { drug, dose, route, frequency }
      - labs: array of { label, value, unit, flag, time }
      - icu: stay summary or null
-   - Display the record and confirm: **"Patient mimic_[id] fetched from MIMIC and saved."**
+   - Display the record and confirm: **"Patient [id] fetched from MIMIC and saved."**
 4. If not found and ID starts with "manual_": show available IDs from patient_load response.
 
 ---
@@ -75,9 +73,9 @@ The user has provided patient information as free text (clinical note, discharge
 ---
 
 ### refresh <patient_id>
-Only valid for MIMIC patients (id starts with "mimic_").
+Only valid for MIMIC patients (source = "mimic" in the saved record).
 
-1. Call \`patient_load\` to get the existing record and confirm it's a MIMIC patient.
+1. Call \`patient_load\` to get the existing record and confirm source is "mimic".
 2. Re-query MIMIC:
    - Call \`mimic_patient\` with the subject_id
    - Call \`mimic_labs\`
@@ -99,7 +97,7 @@ User wants to manually edit the patient record.
 ---
 
 ## Rules
-- Always normalize bare numeric IDs to mimic_<id> before calling patient_load
+- Never modify patient IDs — use them exactly as provided by the user
 - Never invent patient data — only save what comes from MIMIC tools or verbatim from user input
 - When extracting from free text: if a field is not mentioned, leave it empty (empty array or empty object) — do not guess
 - Do not modify existing records unless the command is explicitly refresh or update
