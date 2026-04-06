@@ -224,19 +224,12 @@ feature users actually need.
 predominantly macOS. At that point, ship macOS-only with a Homebrew install requirement
 (`brew install sox`) and gate with a clear "macOS only" notice.
 
-### 6.4 Away Summary ❌ BROKEN — not actually working
+### 6.4 Away Summary ✅ DONE
 
-Code exists (`src/services/awaySummary.ts`, `src/hooks/useAwaySummary.ts`) but the feature
-never fires. Root cause: `handleTerminalFocus` in `App.tsx` is never connected to actual
-terminal DECSET 1004 escape sequences (`\x1b[I` focus-in / `\x1b[O` focus-out). The input
-parser does not detect or dispatch these sequences, so `focusState` stays `'unknown'`
-permanently and `useAwaySummary` treats that as a no-op.
-
-**Fix needed:** Wire DECSET 1004 escape sequence parsing in the terminal input handler to call
-`setTerminalFocused(true/false)`, and emit the enable sequence (`\x1b[?1004h`) on startup.
-
-**Impact:** Clinician steps away mid-session, comes back to a summary of what happened.
-**Effort:** ~2 hours.
+After 5 minutes of terminal blur, generates a short "where you left off" recap.
+Root cause of original failure: `feature('AWAY_SUMMARY')` always returned `false` in the
+Node.js stub, silently disabling the hook. Fixed by enabling `AWAY_SUMMARY` in all
+`bun-bundle` stubs. DECSET 1004, input parsing, and hook wiring were all correct.
 
 ### 6.5 Multi-Agent / Swarm — Clinical Team Review ✅ DONE
 
@@ -353,4 +346,4 @@ healthagent/
 | 3 — Clinical Skills | 4 skill workflows | ✅ Done |
 | 4 — Session Stability | Cross-day resume, parentUuid repair, config isolation | ✅ Done |
 | 5 — Patient Summary | FHIR-aligned schema v1, allergies/vitals/procedures | ✅ Done |
-| 6 — Restorable Features | Session naming ✅, rewind ✅, team review ✅, voice deferred, away summary ❌ broken | Mostly done |
+| 6 — Restorable Features | Session naming ✅, rewind ✅, away summary ✅, team review ✅, voice deferred | ✅ Done |

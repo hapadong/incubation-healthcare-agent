@@ -1,4 +1,6 @@
 // Stub for bun:bundle — feature() is compile-time in Bun; replaced by build script
-export function feature(_flag: string): boolean {
-  return false
+const ENABLED_FEATURES = new Set(['AWAY_SUMMARY'])
+
+export function feature(flag: string): boolean {
+  return ENABLED_FEATURES.has(flag)
 }
