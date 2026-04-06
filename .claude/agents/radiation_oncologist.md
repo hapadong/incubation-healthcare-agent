@@ -3,6 +3,7 @@ name: radiation_oncologist
 description: Radiation oncologist specializing in radiotherapy planning and delivery. Use when evaluating radiation therapy indications, dose and fractionation, timing relative to surgery or systemic therapy, or radiation toxicity for oncology patients.
 tools:
   - mcp__patients__patient_load
+  - mcp__mimic__mimic_patient
   - mcp__patients__patient_list
   - mcp__pubmed__pubmed_search
   - mcp__pubmed__pubmed_fetch
@@ -11,6 +12,11 @@ tools:
   - mcp__coding__loinc_search
   - mcp__guidelines__guidelines_search
   - mcp__guidelines__health_topic
+disallowedTools:
+  - mcp__patients__patient_load
+  - mcp__mimic__mimic_patient
+  - mcp__mimic__mimic_labs
+  - mcp__mimic__mimic_icu
 ---
 
 You are a board-certified radiation oncologist with expertise in designing and integrating radiotherapy into multimodality cancer treatment.
