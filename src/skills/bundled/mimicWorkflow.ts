@@ -6,16 +6,52 @@ IMPORTANT: Execute all steps yourself using the MCP tools listed below. Do NOT u
 
 ## Steps
 
-### 1. Find a matching patient
-Call \`mimic_cohort\` with a medical keyword (or ICD code if provided). Use MIMIC/ICD-9 medical terminology:
-- "lung cancer" → keyword: "malignant lung"
-- "heart attack" → keyword: "myocardial infarction"
-- "heart failure" → keyword: "heart failure"
-- "COPD" → keyword: "chronic obstructive"
-- "stroke" → keyword: "cerebral infarction"
-- "diabetes" → keyword: "diabetes"
+### 1. Find a matching patient (ICD-first approach)
 
-Return 5 results (limit: 5), then pick the first patient with a recent admission.
+**Step 1a — Resolve ICD codes**
+Call \`icd10_search\` with the primary condition (e.g. "non-small cell lung cancer"). Take the top relevant ICD-10 codes (e.g. C34.10, C34.11, C34.12 for NSCLC).
+
+If the condition has a secondary component (e.g. a mutation, comorbidity, or stage), call \`icd10_search\` again for that term.
+
+**Step 1b — Query MIMIC by ICD code using SQL**
+Use \`mimic_sql\` to find patients. All table references must use backtick-quoted fully qualified names.
+
+For a single condition (e.g. ICD codes C34.10–C34.12):
+\`\`\`sql
+SELECT DISTINCT d.subject_id, d.hadm_id, di.long_title, d.icd_code
+FROM \`physionet-data.mimiciv_3_1_hosp.diagnoses_icd\` d
+JOIN \`physionet-data.mimiciv_3_1_hosp.d_icd_diagnoses\` di
+  ON d.icd_code = di.icd_code AND d.icd_version = di.icd_version
+WHERE d.icd_code IN ('C34.10', 'C34.11', 'C34.12')
+LIMIT 10
+\`\`\`
+
+For compound conditions (e.g. NSCLC **and** EGFR mutation — require both codes on the same patient):
+\`\`\`sql
+SELECT DISTINCT d1.subject_id, d1.hadm_id
+FROM \`physionet-data.mimiciv_3_1_hosp.diagnoses_icd\` d1
+JOIN \`physionet-data.mimiciv_3_1_hosp.diagnoses_icd\` d2
+  ON d1.subject_id = d2.subject_id AND d1.hadm_id = d2.hadm_id
+WHERE d1.icd_code IN ('C34.10', 'C34.11', 'C34.12')   -- primary condition
+  AND d2.icd_code IN ('Z15.01', 'C34.90')              -- secondary condition
+LIMIT 10
+\`\`\`
+
+For molecular markers or terms without a clean ICD code, search diagnosis descriptions:
+\`\`\`sql
+SELECT DISTINCT d.subject_id, d.hadm_id, di.long_title, d.icd_code
+FROM \`physionet-data.mimiciv_3_1_hosp.diagnoses_icd\` d
+JOIN \`physionet-data.mimiciv_3_1_hosp.d_icd_diagnoses\` di
+  ON d.icd_code = di.icd_code AND d.icd_version = di.icd_version
+WHERE LOWER(di.long_title) LIKE '%egfr%'
+   OR LOWER(di.long_title) LIKE '%epidermal growth factor%'
+LIMIT 10
+\`\`\`
+
+**Step 1c — Fall back to keyword if SQL returns 0 results**
+Only if the SQL query returns nothing, fall back to \`mimic_cohort\` with a broad keyword. Broaden the ICD prefix (e.g. \`LIKE 'C34%'\`) before giving up entirely.
+
+Pick the first patient returned with a valid subject_id.
 
 ### 2. Pull the patient profile
 Call \`mimic_patient\` with the chosen subject_id. Note demographics, diagnoses (ICD codes), and medications.
@@ -85,11 +121,12 @@ Report:
 ---
 
 ## Rules
-- Never invent or guess subject_ids — always call mimic_cohort first.
+- Always use the ICD-first approach (icd10_search → mimic_sql). Only fall back to mimic_cohort if SQL returns 0 results.
+- Never invent or guess subject_ids — always derive them from tool results.
 - MIMIC dates are shifted for de-identification; do not compare to today's date.
 - Keep all tool queries to de-identified clinical terms — no names or real identifiers.
-- If mimic_cohort returns 0 results, try a synonym or broader keyword before giving up.
-- Call tools sequentially (cohort → patient → labs → trials → drugs). Do not spawn agents.
+- For compound conditions (disease + mutation/marker), use a JOIN query to require both on the same patient.
+- Call tools sequentially. Do not spawn agents.
 `
 
 export function registerMimicWorkflowSkill(): void {

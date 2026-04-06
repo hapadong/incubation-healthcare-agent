@@ -64,7 +64,8 @@ Format the script in a fenced \`\`\`python code block so the user can copy and r
 - Keep queries focused — avoid full table scans where possible (filter by subject_id, hadm_id, or itemid)
 - For lab analysis: join labevents with d_labitems on itemid to get the label; filter by label or itemid
 - Common itemids: Heart Rate=220045, SpO2=220277, Respiratory Rate=220210, Temp °C=223762, Systolic BP=220050
-- For diagnosis queries: join diagnoses_icd with d_icd_diagnoses on (icd_code, icd_version) to get long_title
+- For diagnosis queries: first call \`icd10_search\` to get the correct ICD codes, then join diagnoses_icd with d_icd_diagnoses on (icd_code, icd_version). Never guess ICD codes.
+- For molecular markers or terms without a clean ICD code, use \`LOWER(di.long_title) LIKE '%term%'\` in the WHERE clause
 - If the question is ambiguous, state your interpretation before running the query
 `
 
