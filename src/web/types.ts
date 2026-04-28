@@ -7,6 +7,14 @@ export type ChatMsg = {
   streaming?: boolean
 }
 
+export type StoredSession = {
+  id: string
+  title: string
+  createdAt: string   // ISO
+  updatedAt: string   // ISO
+  messages: ChatMsg[]
+}
+
 export type ControlRequest = {
   requestId: string
   toolName: string

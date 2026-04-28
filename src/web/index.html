@@ -3,67 +3,106 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HealthAgent</title>
+  <title>Verity Health Agent</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0f1117;
-      --surface: #1a1d27;
-      --surface2: #252836;
-      --border: #2e3147;
-      --accent: #4f8ef7;
-      --accent-dim: #1e3a6e;
-      --text: #e2e6f0;
-      --text-dim: #8b92a8;
-      --user-bubble: #1e3a6e;
-      --danger: #e05252;
-      --success: #4caf7d;
-      --tool-bg: #161922;
-      --radius: 10px;
-      --sidebar-w: 260px;
+      --bg:           #f0f2f5;
+      --surface:      #ffffff;
+      --surface2:     #f8f9fb;
+      --surface3:     #f1f3f6;
+      --border:       #e5e7eb;
+      --border-light: #f3f4f6;
+      --accent:       #2563eb;
+      --accent-light: #eff6ff;
+      --accent-dark:  #1d4ed8;
+      --text:         #111827;
+      --text-dim:     #6b7280;
+      --text-xdim:    #9ca3af;
+      --user-bg:      #2563eb;
+      --user-text:    #ffffff;
+      --success:      #16a34a;
+      --danger:       #dc2626;
+      --warning:      #d97706;
+      --tool-bg:      #f8f9fb;
+      --sidebar-w:    260px;
+      --topbar-h:     52px;
+      --radius:       12px;
+      --radius-sm:    8px;
+      --shadow-sm:    0 1px 2px rgba(0,0,0,0.05);
+      --shadow:       0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+      --shadow-md:    0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.05);
+      --shadow-lg:    0 10px 25px rgba(0,0,0,0.1), 0 4px 10px rgba(0,0,0,0.05);
     }
 
-    html, body, #root { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-    body { background: var(--bg); color: var(--text); overflow: hidden; }
+    html, body, #root {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
 
-    /* scrollbar */
-    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
 
-    /* markdown in assistant messages */
-    .md-content p { margin-bottom: 0.6em; }
-    .md-content p:last-child { margin-bottom: 0; }
-    .md-content ul, .md-content ol { padding-left: 1.4em; margin-bottom: 0.6em; }
-    .md-content li { margin-bottom: 0.2em; }
-    .md-content h1, .md-content h2, .md-content h3 {
-      margin: 0.8em 0 0.4em; font-weight: 600;
+    /* ── Markdown content (light theme) ── */
+    .md p                    { margin-bottom: 0.65em; }
+    .md p:last-child         { margin-bottom: 0; }
+    .md ul, .md ol           { padding-left: 1.5em; margin-bottom: 0.65em; }
+    .md li                   { margin-bottom: 0.2em; }
+    .md h1,.md h2,.md h3,.md h4 { font-weight: 600; margin: 1em 0 0.4em; color: var(--text); }
+    .md h1                   { font-size: 1.2em; }
+    .md h2                   { font-size: 1.1em; }
+    .md h3                   { font-size: 1em; }
+    .md code                 {
+      background: #f1f5f9; border: 1px solid #e2e8f0;
+      border-radius: 4px; padding: 0.1em 0.4em;
+      font-family: 'JetBrains Mono','Fira Code','Menlo',monospace; font-size: 0.84em;
+      color: #1e40af;
     }
-    .md-content code {
-      background: var(--tool-bg); border: 1px solid var(--border);
-      border-radius: 4px; padding: 0.1em 0.35em;
-      font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85em;
+    .md pre                  {
+      background: #f8fafc; border: 1px solid #e2e8f0;
+      border-radius: var(--radius-sm); padding: 1em 1.1em;
+      overflow-x: auto; margin-bottom: 0.65em;
     }
-    .md-content pre {
-      background: var(--tool-bg); border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 1em; overflow-x: auto; margin-bottom: 0.6em;
+    .md pre code             { background: none; border: none; padding: 0; color: #334155; }
+    .md blockquote           {
+      border-left: 3px solid var(--accent); padding-left: 0.9em;
+      color: var(--text-dim); margin-bottom: 0.65em;
     }
-    .md-content pre code { background: none; border: none; padding: 0; }
-    .md-content blockquote {
-      border-left: 3px solid var(--accent); padding-left: 0.8em;
-      color: var(--text-dim); margin-bottom: 0.6em;
-    }
-    .md-content table { border-collapse: collapse; width: 100%; margin-bottom: 0.6em; font-size: 0.9em; }
-    .md-content th, .md-content td {
-      border: 1px solid var(--border); padding: 0.4em 0.7em; text-align: left;
-    }
-    .md-content th { background: var(--surface2); }
-    .md-content a { color: var(--accent); text-decoration: none; }
-    .md-content a:hover { text-decoration: underline; }
-    .md-content strong { font-weight: 600; }
-    .md-content em { font-style: italic; }
-    .md-content hr { border: none; border-top: 1px solid var(--border); margin: 0.8em 0; }
+    .md table                { border-collapse: collapse; width: 100%; margin-bottom: 0.65em; font-size: 0.9em; }
+    .md th, .md td           { border: 1px solid var(--border); padding: 0.45em 0.75em; text-align: left; }
+    .md th                   { background: var(--surface2); font-weight: 600; }
+    .md tr:nth-child(even) td { background: var(--surface2); }
+    .md a                    { color: var(--accent); text-decoration: none; }
+    .md a:hover              { text-decoration: underline; }
+    .md strong               { font-weight: 600; }
+    .md em                   { font-style: italic; }
+    .md hr                   { border: none; border-top: 1px solid var(--border); margin: 0.9em 0; }
+
+    /* ── Animations ── */
+    @keyframes blink  { 0%,100%{opacity:1} 50%{opacity:0} }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes spin   { to{transform:rotate(360deg)} }
+
+    .fade-in { animation: fadeIn 0.2s ease forwards; }
+
+    /* ── Buttons reset ── */
+    button { font-family: inherit; cursor: pointer; }
+    button:disabled { cursor: not-allowed; }
+
+    /* ── Input reset ── */
+    textarea, input { font-family: inherit; }
+    textarea:focus, input:focus { outline: none; }
   </style>
 </head>
 <body>

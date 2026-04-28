@@ -1,205 +1,504 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createRoot } from 'react-dom/client'
 import { ChatMessage } from './components/ChatMessage.js'
-import type { ChatMsg, ControlRequest, MetaResponse } from './types.js'
+import type { ChatMsg, StoredSession, ControlRequest, MetaResponse } from './types.js'
 
-// ── Unique ID ─────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 let _seq = 0
 function uid() { return `${Date.now()}-${++_seq}` }
 
+const STORAGE_KEY = 'verity_sessions'
+
+function loadSessions(): StoredSession[] {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]') } catch { return [] }
+}
+
+function persistSessions(sessions: StoredSession[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions))
+}
+
+function groupByDate(sessions: StoredSession[]) {
+  const now = new Date()
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const today = startOf(now)
+  const yesterday = today - 86400000
+  const lastWeek = today - 7 * 86400000
+
+  const groups: { label: string; items: StoredSession[] }[] = [
+    { label: 'Today', items: [] },
+    { label: 'Yesterday', items: [] },
+    { label: 'Last 7 days', items: [] },
+    { label: 'Older', items: [] },
+  ]
+  for (const s of sessions) {
+    const t = new Date(s.updatedAt).getTime()
+    if (t >= today) groups[0].items.push(s)
+    else if (t >= yesterday) groups[1].items.push(s)
+    else if (t >= lastWeek) groups[2].items.push(s)
+    else groups[3].items.push(s)
+  }
+  return groups.filter(g => g.items.length > 0)
+}
+
+// ── Quick action definitions ──────────────────────────────────────────────────
+
+const QUICK_ACTIONS = [
+  { label: 'Search Literature',  cmd: '/litReview',       icon: '🔬', desc: 'Search PubMed for evidence' },
+  { label: 'Clinical Trials',    cmd: '/trialMatch',      icon: '🧪', desc: 'Find matching trials' },
+  { label: 'Drug Information',   cmd: '/drugInfo',        icon: '💊', desc: 'Interactions & safety' },
+  { label: 'Patient Summary',    cmd: '/patientSummary',  icon: '📋', desc: 'Summarize patient records' },
+  { label: 'Clinical Coding',    cmd: '/clinicalCoding',  icon: '🏥', desc: 'ICD-10, LOINC, RxNorm' },
+  { label: 'MIMIC Analytics',    cmd: '/mimicAnalytics',  icon: '📊', desc: 'Query clinical data' },
+]
+
 // ── Permission Modal ──────────────────────────────────────────────────────────
 
-function PermissionModal({
-  req,
-  onDecide,
-}: {
+function PermissionModal({ req, onDecide }: {
   req: ControlRequest
-  onDecide: (decision: 'allow' | 'allow_always' | 'deny') => void
+  onDecide: (d: 'allow' | 'allow_always' | 'deny') => void
 }) {
   return (
-    <div
-      style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-      }}
-    >
-      <div
-        style={{
-          background: 'var(--surface)', border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)', padding: '24px', maxWidth: '480px',
-          width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-        }}
-      >
-        <h3 style={{ marginBottom: '8px', fontSize: '1em', fontWeight: 600 }}>
-          Permission Required
-        </h3>
-        <p style={{ color: 'var(--text-dim)', fontSize: '0.88em', marginBottom: '16px' }}>
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
+      backdropFilter: 'blur(2px)',
+    }}>
+      <div style={{
+        background: 'var(--surface)', borderRadius: '16px',
+        padding: '28px', maxWidth: '460px', width: '90%',
+        boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+          <div style={{
+            width: '36px', height: '36px', borderRadius: '10px',
+            background: '#fff7ed', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2em',
+          }}>⚠️</div>
+          <h3 style={{ fontSize: '1em', fontWeight: 600 }}>Permission Required</h3>
+        </div>
+        <p style={{ color: 'var(--text-dim)', fontSize: '0.88em', marginBottom: '16px', lineHeight: 1.6 }}>
           {req.message}
         </p>
-
-        <div
-          style={{
-            background: 'var(--tool-bg)', border: '1px solid var(--border)',
-            borderRadius: '6px', padding: '12px', marginBottom: '18px',
-          }}
-        >
-          <div style={{ fontWeight: 600, fontSize: '0.9em', color: 'var(--accent)', marginBottom: '6px' }}>
-            {req.toolName}
-          </div>
+        <div style={{
+          background: 'var(--surface2)', borderRadius: 'var(--radius-sm)',
+          padding: '12px', marginBottom: '20px', border: '1px solid var(--border-light)',
+        }}>
+          <div style={{ fontWeight: 600, fontSize: '0.88em', color: 'var(--accent)', marginBottom: '4px' }}>{req.toolName}</div>
           {req.toolDescription && (
-            <div style={{ fontSize: '0.82em', color: 'var(--text-dim)', marginBottom: '8px' }}>
-              {req.toolDescription}
-            </div>
+            <div style={{ fontSize: '0.82em', color: 'var(--text-dim)', marginBottom: '8px' }}>{req.toolDescription}</div>
           )}
           {Object.keys(req.input).length > 0 && (
-            <pre style={{ fontSize: '0.78em', color: 'var(--text-dim)', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>
+            <pre style={{ fontSize: '0.78em', color: 'var(--text-dim)', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0, maxHeight: '120px', overflowY: 'auto' }}>
               {JSON.stringify(req.input, null, 2)}
             </pre>
           )}
         </div>
-
         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-          <button onClick={() => onDecide('deny')} style={btnStyle('var(--danger)')}>
-            Deny
-          </button>
-          <button onClick={() => onDecide('allow')} style={btnStyle('var(--surface2)')}>
-            Allow Once
-          </button>
-          <button onClick={() => onDecide('allow_always')} style={btnStyle('var(--accent)')}>
-            Always Allow
-          </button>
+          <Btn variant="ghost" onClick={() => onDecide('deny')}>Deny</Btn>
+          <Btn variant="secondary" onClick={() => onDecide('allow')}>Allow Once</Btn>
+          <Btn variant="primary" onClick={() => onDecide('allow_always')}>Always Allow</Btn>
         </div>
       </div>
     </div>
   )
 }
 
-function btnStyle(bg: string): React.CSSProperties {
-  return {
-    background: bg, color: 'var(--text)', border: '1px solid var(--border)',
-    borderRadius: '6px', padding: '8px 16px', cursor: 'pointer',
-    fontSize: '0.88em', fontWeight: 500,
-  }
+// ── Settings Modal ────────────────────────────────────────────────────────────
+
+function SettingsModal({ meta, onClose }: { meta: MetaResponse | null; onClose: () => void }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
+      backdropFilter: 'blur(2px)',
+    }} onClick={onClose}>
+      <div style={{
+        background: 'var(--surface)', borderRadius: '16px',
+        padding: '0', maxWidth: '520px', width: '90%',
+        boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)',
+        maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+      }} onClick={e => e.stopPropagation()}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '20px 24px', borderBottom: '1px solid var(--border)',
+        }}>
+          <h2 style={{ fontSize: '1em', fontWeight: 600 }}>Settings</h2>
+          <button onClick={onClose} style={{
+            background: 'none', border: 'none', color: 'var(--text-dim)',
+            width: '28px', height: '28px', borderRadius: '6px', fontSize: '1.1em',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>✕</button>
+        </div>
+
+        <div style={{ overflowY: 'auto', padding: '20px 24px' }}>
+          <Section title="MCP Servers">
+            {meta?.mcpServers.length ? meta.mcpServers.map(s => (
+              <div key={s.name} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '10px 0', borderBottom: '1px solid var(--border-light)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{
+                    width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0,
+                    background: s.status === 'connected' ? 'var(--success)' : s.status === 'error' ? 'var(--danger)' : 'var(--text-xdim)',
+                  }} />
+                  <span style={{ fontWeight: 500 }}>{s.name}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{
+                    padding: '2px 8px', borderRadius: '20px', fontSize: '0.78em',
+                    background: s.status === 'connected' ? '#dcfce7' : s.status === 'error' ? '#fee2e2' : 'var(--surface2)',
+                    color: s.status === 'connected' ? 'var(--success)' : s.status === 'error' ? 'var(--danger)' : 'var(--text-dim)',
+                    fontWeight: 500,
+                  }}>
+                    {s.status}
+                  </span>
+                  <span style={{ fontSize: '0.82em', color: 'var(--text-xdim)' }}>{s.tools.length} tools</span>
+                </div>
+              </div>
+            )) : <Empty>No MCP servers configured</Empty>}
+          </Section>
+
+          <Section title="Available Skills">
+            {meta?.commands.filter(c => c.isSkill).length ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', paddingTop: '4px' }}>
+                {meta!.commands.filter(c => c.isSkill).map(c => (
+                  <span key={c.name} title={c.description} style={{
+                    padding: '4px 10px', borderRadius: '20px',
+                    background: 'var(--accent-light)', color: 'var(--accent)',
+                    fontSize: '0.82em', fontWeight: 500,
+                  }}>
+                    /{c.name}
+                  </span>
+                ))}
+              </div>
+            ) : <Empty>No skills loaded</Empty>}
+          </Section>
+
+          <Section title="Built-in Commands">
+            {meta?.commands.filter(c => !c.isSkill).length ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', paddingTop: '4px' }}>
+                {meta!.commands.filter(c => !c.isSkill).map(c => (
+                  <span key={c.name} title={c.description} style={{
+                    padding: '4px 10px', borderRadius: '20px',
+                    background: 'var(--surface2)', color: 'var(--text-dim)',
+                    fontSize: '0.82em',
+                  }}>
+                    /{c.name}
+                  </span>
+                ))}
+              </div>
+            ) : <Empty>No commands loaded</Empty>}
+          </Section>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: '24px' }}>
+      <div style={{ fontSize: '0.75em', fontWeight: 600, color: 'var(--text-xdim)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '10px' }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return <div style={{ fontSize: '0.88em', color: 'var(--text-xdim)', fontStyle: 'italic' }}>{children}</div>
+}
+
+// ── Command Palette ───────────────────────────────────────────────────────────
+
+function CommandPalette({ meta, query, onPick, onClose }: {
+  meta: MetaResponse | null
+  query: string
+  onPick: (cmd: string) => void
+  onClose: () => void
+}) {
+  const q = query.slice(1).toLowerCase()
+  const matches = (meta?.commands ?? []).filter(c =>
+    !q || c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q)
+  )
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 150,
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+      paddingBottom: '80px',
+    }} onClick={onClose}>
+      <div style={{
+        background: 'var(--surface)', borderRadius: '16px',
+        width: '520px', maxWidth: '90vw',
+        boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)',
+        overflow: 'hidden', maxHeight: '360px', display: 'flex', flexDirection: 'column',
+      }} onClick={e => e.stopPropagation()}>
+        <div style={{
+          padding: '10px 14px', borderBottom: '1px solid var(--border-light)',
+          fontSize: '0.82em', color: 'var(--text-xdim)', fontWeight: 500,
+        }}>
+          Commands & Skills
+        </div>
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {matches.length === 0 && (
+            <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-xdim)', fontSize: '0.88em' }}>
+              No commands match "{q}"
+            </div>
+          )}
+          {matches.map(c => (
+            <button key={c.name} onClick={() => onPick(`/${c.name}`)} style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              width: '100%', padding: '10px 14px',
+              background: 'none', border: 'none', textAlign: 'left',
+              borderBottom: '1px solid var(--border-light)',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface2)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+            >
+              <span style={{
+                width: '28px', height: '28px', borderRadius: '8px', flexShrink: 0,
+                background: c.isSkill ? 'var(--accent-light)' : 'var(--surface2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '0.75em', fontWeight: 700,
+                color: c.isSkill ? 'var(--accent)' : 'var(--text-dim)',
+              }}>
+                {c.isSkill ? '✦' : '/'}
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 500, fontSize: '0.9em' }}>/{c.name}</div>
+                {c.description && (
+                  <div style={{ fontSize: '0.8em', color: 'var(--text-dim)', marginTop: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {c.description}
+                  </div>
+                )}
+              </div>
+              {c.isSkill && (
+                <span style={{ fontSize: '0.75em', color: 'var(--accent)', fontWeight: 500, flexShrink: 0 }}>Skill</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-function Sidebar({ meta, onCommand }: { meta: MetaResponse | null; onCommand: (cmd: string) => void }) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-
-  function toggle(k: string) {
-    setExpanded(prev => ({ ...prev, [k]: !prev[k] }))
-  }
+function Sidebar({ sessions, currentId, onSelect, onNew, onDelete }: {
+  sessions: StoredSession[]
+  currentId: string | null
+  onSelect: (id: string) => void
+  onNew: () => void
+  onDelete: (id: string) => void
+}) {
+  const groups = groupByDate(sessions)
+  const [hoverId, setHoverId] = useState<string | null>(null)
 
   return (
-    <div
-      style={{
-        width: 'var(--sidebar-w)', background: 'var(--surface)', borderRight: '1px solid var(--border)',
-        display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: 0,
-      }}
-    >
-      <div style={{ padding: '16px 14px 12px', borderBottom: '1px solid var(--border)' }}>
-        <span style={{ fontWeight: 700, fontSize: '1.05em', color: 'var(--accent)' }}>HealthAgent</span>
+    <div style={{
+      width: 'var(--sidebar-w)', background: 'var(--surface)',
+      borderRight: '1px solid var(--border)',
+      display: 'flex', flexDirection: 'column',
+      height: '100%', flexShrink: 0,
+    }}>
+      {/* Logo */}
+      <div style={{
+        height: 'var(--topbar-h)', display: 'flex', alignItems: 'center',
+        padding: '0 16px', borderBottom: '1px solid var(--border)',
+      }}>
+        <div style={{
+          width: '26px', height: '26px', borderRadius: '8px',
+          background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '0.65em', fontWeight: 800, color: '#fff', marginRight: '8px',
+          letterSpacing: '-0.02em',
+        }}>VA</div>
+        <span style={{ fontWeight: 700, fontSize: '0.95em', color: 'var(--text)' }}>Verity</span>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0' }}>
-        {/* MCP Servers */}
-        <SideSection label="MCP Servers" open={expanded['mcp']} onToggle={() => toggle('mcp')}>
-          {meta?.mcpServers.map(s => (
-            <div key={s.name} style={{ padding: '4px 14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{
-                width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0,
-                background: s.status === 'connected' ? 'var(--success)' : s.status === 'error' ? 'var(--danger)' : 'var(--text-dim)',
-              }} />
-              <span style={{ fontSize: '0.85em', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {s.name}
-              </span>
-              <span style={{ marginLeft: 'auto', fontSize: '0.75em', color: 'var(--text-dim)' }}>
-                {s.tools.length}
-              </span>
-            </div>
-          ))}
-          {!meta?.mcpServers.length && <EmptyRow />}
-        </SideSection>
+      {/* New Chat */}
+      <div style={{ padding: '12px 10px 8px' }}>
+        <button onClick={onNew} style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          width: '100%', padding: '8px 12px',
+          background: 'var(--accent)', color: '#fff',
+          border: 'none', borderRadius: 'var(--radius-sm)',
+          fontWeight: 500, fontSize: '0.88em',
+          boxShadow: 'var(--shadow-sm)',
+        }}>
+          <span style={{ fontSize: '1.1em', lineHeight: 1 }}>+</span>
+          New Chat
+        </button>
+      </div>
 
-        {/* Skills */}
-        <SideSection label="Skills" open={expanded['skills']} onToggle={() => toggle('skills')}>
-          {meta?.commands.filter(c => c.isSkill).map(c => (
-            <button
-              key={c.name}
-              onClick={() => onCommand(`/${c.name}`)}
-              title={c.description}
-              style={{
-                display: 'block', width: '100%', textAlign: 'left',
-                padding: '5px 14px', background: 'none', border: 'none',
-                color: 'var(--text)', cursor: 'pointer', fontSize: '0.85em',
-              }}
+      {/* History */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0 12px' }}>
+        {groups.length === 0 && (
+          <div style={{ padding: '20px 16px', color: 'var(--text-xdim)', fontSize: '0.85em', textAlign: 'center' }}>
+            No history yet
+          </div>
+        )}
+        {groups.map(g => (
+          <div key={g.label}>
+            <div style={{
+              padding: '10px 16px 4px',
+              fontSize: '0.72em', fontWeight: 600, color: 'var(--text-xdim)',
+              textTransform: 'uppercase', letterSpacing: '0.07em',
+            }}>
+              {g.label}
+            </div>
+            {g.items.map(s => (
+              <div
+                key={s.id}
+                onMouseEnter={() => setHoverId(s.id)}
+                onMouseLeave={() => setHoverId(null)}
+                style={{
+                  position: 'relative',
+                  background: s.id === currentId ? 'var(--accent-light)' : hoverId === s.id ? 'var(--surface2)' : 'transparent',
+                  borderLeft: s.id === currentId ? '2px solid var(--accent)' : '2px solid transparent',
+                }}
+              >
+                <button onClick={() => onSelect(s.id)} style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '8px 36px 8px 14px',
+                  background: 'none', border: 'none',
+                  color: s.id === currentId ? 'var(--accent)' : 'var(--text)',
+                  fontSize: '0.85em',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {s.title}
+                </button>
+                {hoverId === s.id && (
+                  <button
+                    onClick={e => { e.stopPropagation(); onDelete(s.id) }}
+                    style={{
+                      position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)',
+                      background: 'none', border: 'none', color: 'var(--text-xdim)',
+                      width: '20px', height: '20px', borderRadius: '4px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '0.9em',
+                    }}
+                  >✕</button>
+                )}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Welcome Screen ────────────────────────────────────────────────────────────
+
+function WelcomeScreen({ meta, onAction }: {
+  meta: MetaResponse | null
+  onAction: (cmd: string) => void
+}) {
+  const availableSkills = new Set(meta?.commands.map(c => c.name) ?? [])
+  const actions = QUICK_ACTIONS.filter(a => availableSkills.has(a.cmd.slice(1)))
+
+  return (
+    <div style={{
+      flex: 1, display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      padding: '40px 24px',
+    }}>
+      <div style={{
+        width: '52px', height: '52px', borderRadius: '16px',
+        background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '1em', fontWeight: 800, color: '#fff', marginBottom: '16px',
+        boxShadow: '0 4px 14px rgba(37,99,235,0.35)',
+        letterSpacing: '-0.02em',
+      }}>VA</div>
+      <h1 style={{ fontSize: '1.35em', fontWeight: 700, marginBottom: '6px', color: 'var(--text)' }}>
+        Verity Health Agent
+      </h1>
+      <p style={{ color: 'var(--text-dim)', fontSize: '0.92em', marginBottom: '32px', textAlign: 'center', maxWidth: '360px', lineHeight: 1.6 }}>
+        AI-powered clinical research assistant. Ask anything or choose a quick action below.
+      </p>
+
+      {actions.length > 0 && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+          gap: '10px', width: '100%', maxWidth: '640px',
+        }}>
+          {actions.map(a => (
+            <button key={a.cmd} onClick={() => onAction(a.cmd)} style={{
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 'var(--radius)', padding: '14px 16px',
+              textAlign: 'left', boxShadow: 'var(--shadow-sm)',
+              transition: 'box-shadow 0.15s, border-color 0.15s',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.boxShadow = 'var(--shadow-md)'
+              e.currentTarget.style.borderColor = '#c7d2fe'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.boxShadow = 'var(--shadow-sm)'
+              e.currentTarget.style.borderColor = 'var(--border)'
+            }}
             >
-              <span style={{ color: 'var(--accent)' }}>/</span>{c.name}
+              <div style={{ fontSize: '1.3em', marginBottom: '6px' }}>{a.icon}</div>
+              <div style={{ fontWeight: 600, fontSize: '0.9em', marginBottom: '2px' }}>{a.label}</div>
+              <div style={{ fontSize: '0.8em', color: 'var(--text-dim)' }}>{a.desc}</div>
             </button>
           ))}
-          {!meta?.commands.filter(c => c.isSkill).length && <EmptyRow />}
-        </SideSection>
-
-        {/* Built-in commands */}
-        <SideSection label="Commands" open={expanded['cmds']} onToggle={() => toggle('cmds')}>
-          {meta?.commands.filter(c => !c.isSkill).map(c => (
-            <div key={c.name} title={c.description} style={{ padding: '4px 14px', fontSize: '0.85em', color: 'var(--text-dim)' }}>
-              {c.name}
-            </div>
-          ))}
-          {!meta?.commands.filter(c => !c.isSkill).length && <EmptyRow />}
-        </SideSection>
-      </div>
+        </div>
+      )}
     </div>
   )
 }
 
-function SideSection({ label, open, onToggle, children }: {
-  label: string; open: boolean; onToggle: () => void; children: React.ReactNode
+// ── Small button component ────────────────────────────────────────────────────
+
+function Btn({ variant = 'primary', onClick, children, disabled }: {
+  variant?: 'primary' | 'secondary' | 'ghost'
+  onClick?: () => void
+  children: React.ReactNode
+  disabled?: boolean
 }) {
+  const styles: Record<string, React.CSSProperties> = {
+    primary:   { background: 'var(--accent)', color: '#fff', border: '1px solid var(--accent)' },
+    secondary: { background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)' },
+    ghost:     { background: 'none', color: 'var(--danger)', border: '1px solid transparent' },
+  }
   return (
-    <div style={{ marginBottom: '4px' }}>
-      <button
-        onClick={onToggle}
-        style={{
-          display: 'flex', alignItems: 'center', width: '100%', gap: '6px',
-          padding: '6px 14px', background: 'none', border: 'none',
-          color: 'var(--text-dim)', cursor: 'pointer', fontSize: '0.78em',
-          fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-        }}
-      >
-        <span style={{ transition: 'transform 0.15s', transform: open ? 'rotate(90deg)' : 'rotate(0)' }}>▶</span>
-        {label}
-      </button>
-      {open && <div>{children}</div>}
-    </div>
+    <button onClick={onClick} disabled={disabled} style={{
+      ...styles[variant], borderRadius: '8px', padding: '7px 16px',
+      fontWeight: 500, fontSize: '0.88em', opacity: disabled ? 0.5 : 1,
+    }}>
+      {children}
+    </button>
   )
-}
-
-function EmptyRow() {
-  return <div style={{ padding: '4px 14px', fontSize: '0.82em', color: 'var(--text-dim)', fontStyle: 'italic' }}>none</div>
 }
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 
 function App() {
+  const [sessions, setSessions] = useState<StoredSession[]>(() => loadSessions())
+  const [currentId, setCurrentId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
-  const [sessionId, setSessionId] = useState<string | null>(null)
   const [isStreaming, setIsStreaming] = useState(false)
   const [pendingControl, setPendingControl] = useState<ControlRequest | null>(null)
   const [meta, setMeta] = useState<MetaResponse | null>(null)
-  const [suggestions, setSuggestions] = useState<string[]>([])
-  const [suggIdx, setSuggIdx] = useState(-1)
+  const [showSettings, setShowSettings] = useState(false)
+  const [showPalette, setShowPalette] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const esRef = useRef<EventSource | null>(null)
-  const pendingControlRef = useRef<{ requestId: string; resolve: (d: string) => void } | null>(null)
+  const pendingControlRef = useRef<{ resolve: (d: string) => void } | null>(null)
+  const sessionsRef = useRef(sessions)
+  useEffect(() => { sessionsRef.current = sessions }, [sessions])
 
-  // Fetch meta on mount (and after each turn to pick up dynamic changes)
   const fetchMeta = useCallback(async () => {
     try {
       const r = await fetch('/api/meta')
@@ -209,81 +508,120 @@ function App() {
 
   useEffect(() => { fetchMeta() }, [fetchMeta])
 
-  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Slash-command autocomplete
+  // Command palette on "/"
   useEffect(() => {
-    if (!input.startsWith('/') || !meta) { setSuggestions([]); return }
-    const q = input.slice(1).toLowerCase()
-    const matches = meta.commands
-      .filter(c => c.name.toLowerCase().startsWith(q))
-      .map(c => `/${c.name}`)
-    setSuggestions(matches)
-    setSuggIdx(-1)
-  }, [input, meta])
+    if (input.startsWith('/')) setShowPalette(true)
+    else setShowPalette(false)
+  }, [input])
 
-  function appendMsg(msg: ChatMsg) {
-    setMessages(prev => [...prev, msg])
+  // ── Session helpers ─────────────────────────────────────────────────────────
+
+  function upsertSession(session: StoredSession) {
+    setSessions(prev => {
+      const next = prev.some(s => s.id === session.id)
+        ? prev.map(s => s.id === session.id ? session : s)
+        : [session, ...prev]
+      persistSessions(next)
+      return next
+    })
   }
 
-  function patchLastAssistant(patch: Partial<ChatMsg> | ((prev: ChatMsg) => Partial<ChatMsg>)) {
+  function startNewChat() {
+    setCurrentId(null)
+    setMessages([])
+    setInput('')
+    inputRef.current?.focus()
+  }
+
+  function loadSession(id: string) {
+    const s = sessionsRef.current.find(x => x.id === id)
+    if (!s) return
+    setCurrentId(id)
+    setMessages(s.messages)
+    setInput('')
+  }
+
+  function deleteSession(id: string) {
+    setSessions(prev => {
+      const next = prev.filter(s => s.id !== id)
+      persistSessions(next)
+      return next
+    })
+    if (currentId === id) startNewChat()
+  }
+
+  // ── Message state helpers ───────────────────────────────────────────────────
+
+  function patchLastAssistant(updater: (prev: ChatMsg) => Partial<ChatMsg>, sessionId: string, sessionTitle: string) {
     setMessages(prev => {
       const copy = [...prev]
       for (let i = copy.length - 1; i >= 0; i--) {
         if (copy[i].role === 'assistant') {
-          const resolved = typeof patch === 'function' ? patch(copy[i]) : patch
-          copy[i] = { ...copy[i], ...resolved }
+          copy[i] = { ...copy[i], ...updater(copy[i]) }
           break
         }
       }
+      upsertSession({
+        id: sessionId,
+        title: sessionTitle,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messages: copy,
+      })
       return copy
     })
   }
 
-  async function openStream(sid: string) {
-    esRef.current?.close()
+  // ── SSE consumer ────────────────────────────────────────────────────────────
 
+  async function openStream(sid: string, sessionTitle: string, initialMsgs: ChatMsg[]) {
+    esRef.current?.close()
     const es = new EventSource(`/api/stream/${sid}`)
     esRef.current = es
 
-    // placeholder assistant message
-    appendMsg({ id: uid(), role: 'assistant', content: '', streaming: true })
+    let currentMsgs = [...initialMsgs]
+    const assistantMsg: ChatMsg = { id: uid(), role: 'assistant', content: '', streaming: true }
+    currentMsgs = [...currentMsgs, assistantMsg]
+    setMessages(currentMsgs)
+    upsertSession({ id: sid, title: sessionTitle, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messages: currentMsgs })
 
     es.addEventListener('message', (e: MessageEvent) => {
       const msg = JSON.parse(e.data)
 
-      // Streaming text delta
       if (msg.type === 'stream_event') {
         const ev = msg.event
         if (ev?.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
-          patchLastAssistant(prev => ({ content: (prev.content ?? '') + ev.delta.text, streaming: true }))
+          patchLastAssistant(prev => ({ content: (prev.content ?? '') + ev.delta.text, streaming: true }), sid, sessionTitle)
         }
         return
       }
 
-      // Complete assistant turn
       if (msg.type === 'assistant') {
-        const textBlocks = (msg.message?.content ?? []).filter((b: { type: string }) => b.type === 'text')
-        const text = textBlocks.map((b: { text: string }) => b.text).join('')
-        if (text) patchLastAssistant({ content: text, streaming: false })
+        const text = (msg.message?.content ?? [])
+          .filter((b: { type: string }) => b.type === 'text')
+          .map((b: { text: string }) => b.text).join('')
+        if (text) patchLastAssistant(() => ({ content: text, streaming: false }), sid, sessionTitle)
         return
       }
 
-      // Tool use block
       if (msg.type === 'tool_use') {
-        appendMsg({
+        const toolMsg: ChatMsg = {
           id: uid(), role: 'tool',
           toolName: msg.name ?? msg.tool_name ?? 'tool',
-          input: msg.input,
-          content: '',
+          input: msg.input, content: '',
+        }
+        setMessages(prev => {
+          const next = [...prev, toolMsg]
+          upsertSession({ id: sid, title: sessionTitle, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messages: next })
+          return next
         })
         return
       }
 
-      // Tool result
       if (msg.type === 'tool_result') {
         const raw = msg.content
         const text = Array.isArray(raw)
@@ -297,27 +635,23 @@ function App() {
               break
             }
           }
+          upsertSession({ id: sid, title: sessionTitle, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), messages: copy })
           return copy
         })
         return
       }
 
-      // Turn complete
       if (msg.type === 'result') {
-        patchLastAssistant({ streaming: false })
+        patchLastAssistant(() => ({ streaming: false }), sid, sessionTitle)
         setIsStreaming(false)
-        es.close()
-        esRef.current = null
+        es.close(); esRef.current = null
         fetchMeta()
-        return
       }
     })
 
     es.addEventListener('control_request', (e: MessageEvent) => {
       const req = JSON.parse(e.data) as ControlRequest
-      // store resolver in ref so modal callback can use it
       pendingControlRef.current = {
-        requestId: req.requestId,
         resolve: async (decision: string) => {
           setPendingControl(null)
           pendingControlRef.current = null
@@ -332,177 +666,189 @@ function App() {
     })
 
     es.addEventListener('error', () => {
-      patchLastAssistant({ streaming: false })
+      patchLastAssistant(() => ({ streaming: false }), sid, sessionTitle)
       setIsStreaming(false)
-      es.close()
-      esRef.current = null
+      es.close(); esRef.current = null
     })
   }
 
   async function sendMessage(text: string) {
     const trimmed = text.trim()
     if (!trimmed || isStreaming) return
-
-    appendMsg({ id: uid(), role: 'user', content: trimmed })
     setInput('')
-    setSuggestions([])
+    setShowPalette(false)
     setIsStreaming(true)
+
+    const title = trimmed.slice(0, 52) + (trimmed.length > 52 ? '…' : '')
+    const userMsg: ChatMsg = { id: uid(), role: 'user', content: trimmed }
+    const nextMsgs = [...messages, userMsg]
+    // Optimistic UI update only — no localStorage until we have the real backendSid
+    setMessages(nextMsgs)
 
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: trimmed, sessionId: sessionId ?? undefined }),
+        body: JSON.stringify({ message: trimmed, sessionId: currentId ?? undefined }),
       })
-      const { sessionId: sid } = await res.json()
-      setSessionId(sid)
-      await openStream(sid)
+      const { sessionId: backendSid } = await res.json()
+      // Set current ID from server (single source of truth)
+      setCurrentId(backendSid)
+      await openStream(backendSid, title, nextMsgs)
     } catch (err) {
-      appendMsg({ id: uid(), role: 'assistant', content: `Error: ${String(err)}` })
+      setMessages(prev => [...prev, { id: uid(), role: 'assistant', content: `Error: ${String(err)}` }])
       setIsStreaming(false)
     }
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    // Autocomplete navigation
-    if (suggestions.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-      e.preventDefault()
-      setSuggIdx(prev => {
-        if (e.key === 'ArrowDown') return Math.min(prev + 1, suggestions.length - 1)
-        return Math.max(prev - 1, 0)
-      })
-      return
-    }
-    if (suggestions.length && e.key === 'Tab') {
-      e.preventDefault()
-      const pick = suggestions[suggIdx >= 0 ? suggIdx : 0]
-      setInput(pick + ' ')
-      setSuggestions([])
-      return
-    }
+    if (e.key === 'Escape') { setShowPalette(false); return }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      if (suggestions.length && suggIdx >= 0) {
-        setInput(suggestions[suggIdx] + ' ')
-        setSuggestions([])
-        return
-      }
       sendMessage(input)
     }
   }
 
-  function injectCommand(cmd: string) {
+  function pickCommand(cmd: string) {
     setInput(cmd + ' ')
+    setShowPalette(false)
     inputRef.current?.focus()
   }
 
-  function handleDecide(decision: 'allow' | 'allow_always' | 'deny') {
-    pendingControlRef.current?.resolve(decision)
-  }
-
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-      <Sidebar meta={meta} onCommand={injectCommand} />
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
 
-      {/* Chat area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {/* Messages */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-          {messages.length === 0 && (
-            <div style={{
-              height: '100%', display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)',
-            }}>
-              <div style={{ fontSize: '2em', marginBottom: '12px' }}>🏥</div>
-              <div style={{ fontSize: '1.1em', fontWeight: 600, marginBottom: '6px' }}>HealthAgent</div>
-              <div style={{ fontSize: '0.9em' }}>Clinical AI assistant. Ask anything or use a /skill.</div>
-            </div>
-          )}
-          {messages.map(msg => (
-            <ChatMessage
-              key={msg.id}
-              msg={msg}
-              isStreaming={isStreaming}
-            />
-          ))}
-          <div ref={messagesEndRef} />
+      <Sidebar
+        sessions={sessions}
+        currentId={currentId}
+        onSelect={id => { loadSession(id) }}
+        onNew={startNewChat}
+        onDelete={deleteSession}
+      />
+
+      {/* Main content */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+
+        {/* Top bar */}
+        <div style={{
+          height: 'var(--topbar-h)', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', padding: '0 20px',
+          background: 'var(--surface)', borderBottom: '1px solid var(--border)',
+          flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontWeight: 600, color: 'var(--text)', fontSize: '0.95em' }}>
+              {currentId
+                ? sessions.find(s => s.id === currentId)?.title ?? 'Chat'
+                : 'New Chat'}
+            </span>
+          </div>
+          <button onClick={() => setShowSettings(true)} title="Settings" style={{
+            background: 'none', border: '1px solid var(--border)',
+            borderRadius: '8px', width: '32px', height: '32px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--text-dim)', fontSize: '0.9em',
+          }}>
+            ⚙
+          </button>
         </div>
 
-        {/* Input bar */}
-        <div style={{ padding: '12px 24px 16px', borderTop: '1px solid var(--border)', position: 'relative' }}>
-          {/* Autocomplete dropdown */}
-          {suggestions.length > 0 && (
-            <div style={{
-              position: 'absolute', bottom: '100%', left: '24px', right: '24px',
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)', overflow: 'hidden', marginBottom: '4px',
-              boxShadow: '0 -8px 24px rgba(0,0,0,0.4)',
-            }}>
-              {suggestions.map((s, i) => (
-                <div
-                  key={s}
-                  onClick={() => { setInput(s + ' '); setSuggestions([]); inputRef.current?.focus() }}
-                  style={{
-                    padding: '8px 14px', cursor: 'pointer', fontSize: '0.88em',
-                    background: i === suggIdx ? 'var(--surface2)' : 'transparent',
-                    color: i === suggIdx ? 'var(--text)' : 'var(--text-dim)',
-                    borderBottom: i < suggestions.length - 1 ? '1px solid var(--border)' : 'none',
-                  }}
-                >
-                  <span style={{ color: 'var(--accent)' }}>{s}</span>
-                  {meta?.commands.find(c => `/${c.name}` === s)?.description && (
-                    <span style={{ marginLeft: '10px', fontSize: '0.9em', opacity: 0.7 }}>
-                      {meta.commands.find(c => `/${c.name}` === s)?.description}
-                    </span>
-                  )}
-                </div>
+        {/* Messages or Welcome */}
+        {messages.length === 0
+          ? <WelcomeScreen meta={meta} onAction={cmd => { setInput(cmd + ' '); inputRef.current?.focus() }} />
+          : (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
+              {messages.map(msg => (
+                <ChatMessage key={msg.id} msg={msg} isStreaming={isStreaming} />
               ))}
+              <div ref={messagesEndRef} />
             </div>
-          )}
+          )
+        }
 
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+        {/* Quick action chips — shown only when messages exist */}
+        {messages.length > 0 && !isStreaming && meta && (
+          <div style={{
+            display: 'flex', gap: '6px', flexWrap: 'wrap',
+            padding: '8px 32px 0',
+          }}>
+            {QUICK_ACTIONS
+              .filter(a => meta.commands.some(c => c.name === a.cmd.slice(1)))
+              .map(a => (
+                <button key={a.cmd} onClick={() => pickCommand(a.cmd)} style={{
+                  padding: '4px 12px', borderRadius: '20px',
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  fontSize: '0.8em', color: 'var(--text-dim)',
+                  boxShadow: 'var(--shadow-sm)',
+                }}>
+                  {a.icon} {a.label}
+                </button>
+              ))
+            }
+          </div>
+        )}
+
+        {/* Input area */}
+        <div style={{ padding: '12px 32px 20px', flexShrink: 0 }}>
+          <div style={{
+            display: 'flex', gap: '10px', alignItems: 'flex-end',
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: '14px', padding: '10px 10px 10px 16px',
+            boxShadow: 'var(--shadow)',
+            transition: 'border-color 0.15s',
+          }}
+          onFocusCapture={e => (e.currentTarget.style.borderColor = 'var(--accent)')}
+          onBlurCapture={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+          >
             <textarea
               ref={inputRef}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={isStreaming ? 'Waiting for response…' : 'Message HealthAgent… (/ for skills, Shift+Enter for newline)'}
+              placeholder={isStreaming ? 'Waiting for response…' : 'Ask Verity anything… (/ for commands)'}
               disabled={isStreaming}
               rows={1}
               style={{
-                flex: 1, resize: 'none', background: 'var(--surface2)',
-                border: '1px solid var(--border)', borderRadius: 'var(--radius)',
-                color: 'var(--text)', padding: '10px 14px', fontSize: '0.95em',
-                lineHeight: 1.5, outline: 'none', fontFamily: 'inherit',
-                maxHeight: '180px', overflowY: 'auto',
+                flex: 1, resize: 'none', background: 'none', border: 'none',
+                color: 'var(--text)', fontSize: '0.95em', lineHeight: 1.55,
+                maxHeight: '160px', overflowY: 'auto',
                 opacity: isStreaming ? 0.6 : 1,
               }}
               onInput={e => {
                 const el = e.currentTarget
                 el.style.height = 'auto'
-                el.style.height = Math.min(el.scrollHeight, 180) + 'px'
+                el.style.height = Math.min(el.scrollHeight, 160) + 'px'
               }}
             />
             <button
               onClick={() => sendMessage(input)}
               disabled={!input.trim() || isStreaming}
               style={{
-                background: 'var(--accent)', color: '#fff', border: 'none',
-                borderRadius: 'var(--radius)', padding: '10px 18px',
-                cursor: (!input.trim() || isStreaming) ? 'not-allowed' : 'pointer',
-                fontWeight: 600, fontSize: '0.9em',
-                opacity: (!input.trim() || isStreaming) ? 0.5 : 1,
-                transition: 'opacity 0.15s',
+                width: '34px', height: '34px', borderRadius: '10px', flexShrink: 0,
+                background: (!input.trim() || isStreaming) ? 'var(--surface2)' : 'var(--accent)',
+                color: (!input.trim() || isStreaming) ? 'var(--text-xdim)' : '#fff',
+                border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'background 0.15s',
               }}
             >
-              Send
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
             </button>
+          </div>
+          <div style={{ textAlign: 'center', marginTop: '6px', fontSize: '0.72em', color: 'var(--text-xdim)' }}>
+            Verity may make mistakes. Always verify clinical information with authoritative sources.
           </div>
         </div>
       </div>
 
+      {showPalette && (
+        <CommandPalette meta={meta} query={input} onPick={pickCommand} onClose={() => setShowPalette(false)} />
+      )}
+      {showSettings && <SettingsModal meta={meta} onClose={() => setShowSettings(false)} />}
       {pendingControl && (
-        <PermissionModal req={pendingControl} onDecide={handleDecide} />
+        <PermissionModal req={pendingControl} onDecide={d => pendingControlRef.current?.resolve(d)} />
       )}
     </div>
   )
@@ -510,5 +856,4 @@ function App() {
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
-const root = createRoot(document.getElementById('root')!)
-root.render(<App />)
+createRoot(document.getElementById('root')!).render(<App />)
