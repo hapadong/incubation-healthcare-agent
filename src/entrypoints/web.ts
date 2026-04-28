@@ -30,7 +30,8 @@ import {
 import { getCwd } from '../utils/cwd.js'
 import { enableConfigs } from '../utils/config.js'
 import { applySafeConfigEnvironmentVariables } from '../utils/managedEnv.js'
-import { setOriginalCwd } from '../bootstrap/state.js'
+import { setOriginalCwd, switchSession } from '../bootstrap/state.js'
+import type { SessionId } from '../bootstrap/state.js'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -128,6 +129,10 @@ function buildApp(engineSession: EngineSession) {
     const message = session.pendingMessage
     session.pendingMessage = null
     session.lastActiveAt = new Date()
+
+    // Set global session ID so audit log entries are tagged with this web session.
+    // Best-effort: concurrent sessions share the global; the last to start wins.
+    switchSession(sessionId as SessionId)
 
     return streamSSE(c, async (stream) => {
       // Permission handler: emits a control_request event then waits for
@@ -284,6 +289,11 @@ async function main() {
 
   console.log('Starting HealthAgent web server...')
   console.log(`Initializing tools and MCP servers from ${cwd}`)
+
+  // Register PHI guardrail + audit logger (same hooks as CLI path)
+  await import('../utils/healthagent/complianceHooks.js')
+    .then(m => m.registerComplianceHooks())
+    .catch(err => console.error('[HealthAgent] Failed to load compliance hooks:', err))
 
   const engineSession = await createEngineSession({ cwd })
   const mcpMeta = getMcpServerMeta(engineSession)

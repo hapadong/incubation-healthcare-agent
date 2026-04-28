@@ -371,6 +371,7 @@ export async function setup(
     ) // Register session file access analytics hooks
     if (
       process.env.HEALTHAGENT_API_BASE_URL ||
+      process.env.HEALTHAGENT_WEB ||
       process.argv[1]?.includes('ha')
     ) {
       import('./utils/healthagent/complianceHooks.js').then(m =>
