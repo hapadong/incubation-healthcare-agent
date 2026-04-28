@@ -367,7 +367,7 @@ for (let round = 1; round <= MAX_ROUNDS; round++) {
 
 if (succeeded) {
   const size = (await stat(OUT_FILE)).size
-  console.log(`\n✅ Build succeeded: ${OUT_FILE}`)
+  console.log(`\n✅ CLI build succeeded: ${OUT_FILE}`)
   console.log(`   Size: ${(size / 1024 / 1024).toFixed(1)}MB`)
   console.log(`\n   Usage:  node ${OUT_FILE} --version`)
   console.log(`           node ${OUT_FILE} -p "Hello"`)
@@ -379,4 +379,58 @@ if (succeeded) {
   console.error('   2. Create missing stubs in build-src/src/')
   console.error('   3. Re-run: node scripts/build.mjs')
   process.exit(1)
+}
+
+// ── PHASE 5: Web server bundle ─────────────────────────────────────────────
+// Reuses build-src/ (already transformed + stubbed by Phase 4).
+// Single pass — stubs are already in place from the CLI build.
+
+console.log('\n🔨 Phase 5: Bundling web server...')
+
+const WEB_ENTRY = join(BUILD, 'src', 'entrypoints', 'web.ts')
+const WEB_OUT = join(OUT_DIR, 'web.cjs')
+const WEB_STATIC_DIR = join(OUT_DIR, 'web-static')
+
+await mkdir(WEB_STATIC_DIR, { recursive: true })
+
+const WEB_BANNER = `#!/usr/bin/env node\n// HealthAgent web server (built from source)\nconst __import_meta_url = require("url").pathToFileURL(__filename).href;\n`
+
+const SHARED_FLAGS = [
+  '--bundle',
+  '--platform=node',
+  '--target=node18',
+  '--format=cjs',
+  `--banner:js=$'${WEB_BANNER.replace(/\n/g, '\\n')}'`,
+  `--define:import.meta.url=__import_meta_url`,
+  '--external:bun:*',
+  '--external:fsevents',
+  '--external:@azure/identity',
+  '--external:@anthropic-ai/vertex-sdk',
+  '--external:@aws-sdk/client-bedrock',
+  '--external:@aws-sdk/credential-providers',
+  '--external:@ant/claude-for-chrome-mcp',
+  '--external:modifiers-napi',
+  '--external:color-diff-napi',
+  '--external:sharp',
+  '--loader:.md=text',
+  '--loader:.txt=text',
+  `--alias:src=${join(BUILD, 'src')}`,
+  '--allow-overwrite',
+  '--log-level=error',
+  '--sourcemap',
+].join(' ')
+
+try {
+  execSync(
+    `npx esbuild "${WEB_ENTRY}" ${SHARED_FLAGS} --outfile="${WEB_OUT}"`,
+    { cwd: ROOT, stdio: 'inherit', shell: true },
+  )
+  const webSize = (await stat(WEB_OUT)).size
+  console.log(`✅ Web server build succeeded: ${WEB_OUT}`)
+  console.log(`   Size: ${(webSize / 1024 / 1024).toFixed(1)}MB`)
+  console.log(`\n   Usage:  node ${WEB_OUT}`)
+  console.log(`           HEALTHAGENT_WEB_PORT=3000 node ${WEB_OUT}`)
+} catch (e) {
+  console.error('\n⚠️  Web server build failed (CLI build still succeeded):')
+  console.error(e.message?.split('\n').slice(0, 10).join('\n'))
 }

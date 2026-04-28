@@ -78,6 +78,7 @@
     "zod": "^4.3.6"
   },
   "bin": {
-    "ha": "./dist/cli.cjs"
+    "ha": "./dist/cli.cjs",
+    "ha-web": "./dist/web.cjs"
   }
 }
