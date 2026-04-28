@@ -1,6 +1,10 @@
 import { config as loadDotenv } from 'dotenv'
 loadDotenv()
 
+// Tell all isHealthAgent checks that this process is the HealthAgent web server.
+// Without this, process.argv[1] is 'web.cjs' (not 'ha') so identity falls back to generic Claude.
+process.env.HEALTHAGENT_WEB = '1'
+
 import { randomUUID } from 'crypto'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'

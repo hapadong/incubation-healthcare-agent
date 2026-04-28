@@ -34,7 +34,7 @@ export function getCLISyspromptPrefix(options?: {
   hasAppendSystemPrompt: boolean
 }): CLISyspromptPrefix {
   // Verity Health Agent: use HealthAgent prefix when configured
-  if (process.env.HEALTHAGENT_API_BASE_URL || process.argv[1]?.includes('ha')) {
+  if (process.env.HEALTHAGENT_API_BASE_URL || process.env.HEALTHAGENT_WEB || process.argv[1]?.includes('ha')) {
     return HEALTHAGENT_PREFIX
   }
 
