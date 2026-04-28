@@ -434,3 +434,44 @@ try {
   console.error('\n⚠️  Web server build failed (CLI build still succeeded):')
   console.error(e.message?.split('\n').slice(0, 10).join('\n'))
 }
+
+// ── PHASE 6: Frontend browser bundle ─────────────────────────────────────────
+
+console.log('\n🔨 Phase 6: Bundling frontend...')
+
+const FRONTEND_ENTRY = join(ROOT, 'src', 'web', 'app.tsx')
+const FRONTEND_OUT = join(WEB_STATIC_DIR, 'app.js')
+const FRONTEND_HTML_SRC = join(ROOT, 'src', 'web', 'index.html')
+const FRONTEND_HTML_DST = join(WEB_STATIC_DIR, 'index.html')
+
+try {
+  execSync(
+    [
+      'npx esbuild',
+      `"${FRONTEND_ENTRY}"`,
+      '--bundle',
+      '--platform=browser',
+      '--target=es2020',
+      '--format=esm',
+      '--jsx=automatic',
+      `--outfile="${FRONTEND_OUT}"`,
+      '--minify',
+      '--sourcemap',
+      '--allow-overwrite',
+      '--log-level=error',
+    ].join(' '),
+    { cwd: ROOT, stdio: 'inherit', shell: true },
+  )
+
+  // Copy index.html
+  const { copyFile } = await import('node:fs/promises')
+  await copyFile(FRONTEND_HTML_SRC, FRONTEND_HTML_DST)
+
+  const frontendSize = (await stat(FRONTEND_OUT)).size
+  console.log(`✅ Frontend build succeeded: ${FRONTEND_OUT}`)
+  console.log(`   Size: ${(frontendSize / 1024).toFixed(0)}KB (minified)`)
+  console.log(`   index.html copied to ${FRONTEND_HTML_DST}`)
+} catch (e) {
+  console.error('\n⚠️  Frontend build failed (server build still succeeded):')
+  console.error(e.message?.split('\n').slice(0, 10).join('\n'))
+}
