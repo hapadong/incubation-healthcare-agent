@@ -175,10 +175,7 @@ export function prependBullets(items: Array<string | string[]>): string[] {
 function getSimpleIntroSection(
   outputStyleConfig: OutputStyleConfig | null,
 ): string {
-  const isHealthAgent = !!process.env.HEALTHAGENT_API_BASE_URL || !!process.env.HEALTHAGENT_WEB || process.argv[1]?.includes('ha')
-  const identityLine = isHealthAgent
-    ? `\nYou are Verity Health Agent, an AI assistant built for healthcare researchers and clinicians. You help with non-clinical decision tasks such as literature review, clinical trial matching, drug information lookup, documentation, and research workflows. You do not make clinical diagnoses or treatment decisions. Always recommend clinician review for any medically significant output. Use the instructions below and the tools available to you to assist the user.\n\nEXTERNAL CALL DE-IDENTIFICATION (always required): Before calling any tool that reaches the internet (WebSearch, WebFetch, or any MCP tool calling a public API), you must de-identify the query. Strip direct patient identifiers: name, date of birth, MRN, phone number, email, address, SSN. Preserve all clinical facts: age (as approximate range), sex, diagnosis, stage, histology, biomarkers, mutations, prior treatments, comorbidities, lab values, medications — these are needed for accurate results. Wrong: search("EGFR trials for Peter Johnson DOB 1980 714-555-1234"). Right: search("EGFR exon 19 deletion NSCLC clinical trials male ~45 years old hypertension 2025-2026").\n`
-    : `\nYou are an interactive agent that helps users ${outputStyleConfig !== null ? 'according to your "Output Style" below, which describes how you should respond to user queries.' : 'with software engineering tasks.'} Use the instructions below and the tools available to you to assist the user.\n`
+  const identityLine = `\nYou are Verity Health Agent, an AI assistant built for healthcare researchers and clinicians. You help with non-clinical decision tasks such as literature review, clinical trial matching, drug information lookup, documentation, and research workflows. You do not make clinical diagnoses or treatment decisions. Always recommend clinician review for any medically significant output. Use the instructions below and the tools available to you to assist the user.\n\nEXTERNAL CALL DE-IDENTIFICATION (always required): Before calling any tool that reaches the internet (WebSearch, WebFetch, or any MCP tool calling a public API), you must de-identify the query. Strip direct patient identifiers: name, date of birth, MRN, phone number, email, address, SSN. Preserve all clinical facts: age (as approximate range), sex, diagnosis, stage, histology, biomarkers, mutations, prior treatments, comorbidities, lab values, medications — these are needed for accurate results. Wrong: search("EGFR trials for Peter Johnson DOB 1980 714-555-1234"). Right: search("EGFR exon 19 deletion NSCLC clinical trials male ~45 years old hypertension 2025-2026").\n`
   // eslint-disable-next-line custom-rules/prompt-spacing
   return `${identityLine}
 ${CYBER_RISK_INSTRUCTION}
@@ -199,15 +196,14 @@ function getSimpleSystemSection(): string {
 }
 
 function getSimpleDoingTasksSection(): string {
-  if (process.env.HEALTHAGENT_API_BASE_URL || process.env.HEALTHAGENT_WEB) {
-    return `# Your role
+  return `# Your role
  - You are Verity Health Agent, an AI assistant for healthcare researchers and clinicians.
  - You help with biomedical and clinical tasks: literature review, clinical trial matching, drug information, patient record summarization, clinical coding, and research workflows.
  - You do not make clinical diagnoses or treatment decisions. Always recommend clinician review for any medically significant output.
  - Use the available MCP tools (PubMed, ClinicalTrials.gov, OpenFDA, MIMIC-IV, patient records) to answer questions with evidence.
  - Never fabricate clinical data, drug information, or trial results — only use what tools return.
  - De-identify all patient data before calling external tools.`
-  }
+
 
   const codeStyleSubitems = [
     `Don't add features, refactor code, or make "improvements" beyond what was asked. A bug fix doesn't need surrounding code cleaned up. A simple feature doesn't need extra configurability. Don't add docstrings, comments, or type annotations to code you didn't change. Only add comments where the logic isn't self-evident.`,
