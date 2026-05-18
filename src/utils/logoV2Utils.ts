@@ -239,6 +239,18 @@ export function formatReleaseNoteForDisplay(
 /**
  * Gets the common logo display data used by both LogoV2 and CondensedLogo
  */
+function getHealthAgentBackendLabel(): string {
+  const url = process.env.HEALTHAGENT_API_BASE_URL ?? ''
+  if (/localhost|127\.0\.0\.1|0\.0\.0\.0/.test(url)) return 'Local'
+  if (url.includes('.openai.azure.com')) return 'Azure OpenAI'
+  try {
+    const host = new URL(url).hostname
+    return host || 'Custom Backend'
+  } catch {
+    return 'Custom Backend'
+  }
+}
+
 export function getLogoDisplayData(): {
   version: string
   appName: string
@@ -259,7 +271,7 @@ export function getLogoDisplayData(): {
     ? `${displayPath} in ${serverUrl.replace(/^https?:\/\//, '')}`
     : displayPath
   const billingType = isHealthAgent
-    ? 'Azure OpenAI'
+    ? getHealthAgentBackendLabel()
     : isClaudeAISubscriber()
     ? getSubscriptionName()
     : 'API Usage Billing'
