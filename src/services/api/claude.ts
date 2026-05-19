@@ -3399,6 +3399,19 @@ function isMaxTokensCapEnabled(): boolean {
 export function getMaxOutputTokensForModel(model: string): number {
   const maxOutputTokens = getModelMaxOutputTokens(model)
 
+  // HEALTHAGENT override: local models (oMLX, Ollama, etc.) rarely produce
+  // 32k-token responses but ha defaults to reserving 32k for output, which
+  // leaves zero headroom on a 32k-context model and causes constant
+  // auto-compact. Setting HEALTHAGENT_MAX_OUTPUT_TOKENS=4096 (for example)
+  // recovers ~28k of input space and prevents the compaction loop.
+  const healthAgentOverride = process.env.HEALTHAGENT_MAX_OUTPUT_TOKENS
+  if (healthAgentOverride) {
+    const parsed = parseInt(healthAgentOverride, 10)
+    if (!isNaN(parsed) && parsed > 0) {
+      return Math.min(parsed, maxOutputTokens.upperLimit)
+    }
+  }
+
   // Slot-reservation cap: drop default to 8k for all models. BQ p99 output
   // = 4,911 tokens; 32k/64k defaults over-reserve 8-16× slot capacity.
   // Requests hitting the cap get one clean retry at 64k (query.ts
