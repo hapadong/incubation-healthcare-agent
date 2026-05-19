@@ -451,13 +451,44 @@ const _getProjectDirMemoized = memoize((projectDir: string): string => {
 
 export function getProjectDir(projectDir: string): string {
   if (isHealthAgentMode()) {
-    // Clinical sessions are not tied to a cwd — bucket by today's date.
-    // getSessionId() is read fresh so /clear (which calls regenerateSessionId)
-    // immediately starts a new bucket on the correct date.
-    const today = new Date().toISOString().slice(0, 10)
+    // Clinical sessions are not tied to a cwd — bucket by today's LOCAL date.
+    // Using local date (not UTC) avoids cross-midnight mismatches for users
+    // in timezones behind UTC who run sessions in the evening.
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     return join(getProjectsDir(), today)
   }
   return _getProjectDirMemoized(projectDir)
+}
+
+/**
+ * In HealthAgent mode, sessions are bucketed by date across multiple date
+ * directories. This helper scans ALL date directories under the sessions root
+ * so that --continue and --resume work regardless of which date bucket a
+ * session was created in (e.g., late-night sessions that cross midnight).
+ */
+async function getHealthAgentAllSessionFiles(
+  limit?: number,
+): Promise<LogOption[]> {
+  const sessionsDir = getProjectsDir()
+  let dirents: Dirent[]
+  try {
+    dirents = await readdir(sessionsDir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+
+  const dateDirs = dirents
+    .filter(d => d.isDirectory() && /^\d{4}-\d{2}-\d{2}$/.test(d.name))
+    .map(d => join(sessionsDir, d.name))
+    .sort() // chronological order; deduplicateLogsBySessionId keeps newest mtime
+
+  const allLogs: LogOption[] = []
+  for (const dir of dateDirs) {
+    allLogs.push(...(await getSessionFilesLite(dir, undefined, getOriginalCwd())))
+  }
+
+  return deduplicateLogsBySessionId(allLogs)
 }
 
 let project: Project | null = null
@@ -2633,6 +2664,9 @@ async function trackSessionBranchingAnalytics(
 }
 
 export async function fetchLogs(limit?: number): Promise<LogOption[]> {
+  if (isHealthAgentMode()) {
+    return getHealthAgentAllSessionFiles(limit)
+  }
   const projectDir = getProjectDir(getOriginalCwd())
   const logs = await getSessionFilesLite(projectDir, limit, getOriginalCwd())
 
@@ -4218,6 +4252,10 @@ async function getStatOnlyLogsForWorktrees(
   worktreePaths: string[],
   limit?: number,
 ): Promise<LogOption[]> {
+  if (isHealthAgentMode()) {
+    return getHealthAgentAllSessionFiles(limit)
+  }
+
   const projectsDir = getProjectsDir()
 
   if (worktreePaths.length <= 1) {
