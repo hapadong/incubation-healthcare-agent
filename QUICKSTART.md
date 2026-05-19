@@ -63,6 +63,14 @@ curl http://localhost:8000/v1/models
 
 Use the `id` field from the response as `HEALTHAGENT_MODEL`.
 
+If your model has a smaller context window than Claude (e.g. 32k), set:
+
+```bash
+HEALTHAGENT_MAX_CONTEXT_TOKENS=32768
+```
+
+Without this the agent will assume a large context and hit "Prompt too long" errors mid-task.
+
 ### Other Supported Backends
 
 | Backend | `HEALTHAGENT_API_BASE_URL` | `HEALTHAGENT_API_KEY` |
