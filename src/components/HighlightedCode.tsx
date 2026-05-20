@@ -83,7 +83,7 @@ export const HighlightedCode = memo(function HighlightedCode(t0) {
   useEffect(t3, t4);
   let t5;
   bb1: {
-    if (colorFile === null) {
+    if (colorFile === null || typeof colorFile.render !== 'function') {
       t5 = null;
       break bb1;
     }
