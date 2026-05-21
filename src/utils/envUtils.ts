@@ -2,19 +2,23 @@ import memoize from 'lodash-es/memoize.js'
 import { homedir } from 'os'
 import { join } from 'path'
 
-// Memoized: 150+ callers, many on hot paths. Keyed off CLAUDE_CONFIG_DIR so
-// tests that change the env var get a fresh value without explicit cache.clear.
-export const getClaudeConfigHomeDir = memoize(
+// Memoized: many callers on hot paths. Keyed off HEALTHAGENT_HOME so tests
+// that change the env var get a fresh value without explicit cache.clear.
+export const getConfigHomeDir = memoize(
   (): string => {
     return (
-      process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude')
+      process.env.HEALTHAGENT_HOME ?? join(homedir(), '.healthagent')
     ).normalize('NFC')
   },
-  () => process.env.CLAUDE_CONFIG_DIR,
+  () => process.env.HEALTHAGENT_HOME,
 )
 
+// Backward-compat alias — use getConfigHomeDir in new code.
+export const getClaudeConfigHomeDir = getConfigHomeDir
+export const getHealthAgentHomeDir = getConfigHomeDir
+
 export function getTeamsDir(): string {
-  return join(getClaudeConfigHomeDir(), 'teams')
+  return join(getConfigHomeDir(), 'teams')
 }
 
 /**
@@ -24,20 +28,6 @@ export function getTeamsDir(): string {
 export function isHealthAgentMode(): boolean {
   return Boolean(process.env.HEALTHAGENT_API_BASE_URL)
 }
-
-/**
- * Base directory for all HealthAgent data.
- * Override via HEALTHAGENT_HOME env var (useful for testing).
- * Future: when SSO lands, remote stores will use this as the local cache root.
- */
-export const getHealthAgentHomeDir = memoize(
-  (): string => {
-    return (
-      process.env.HEALTHAGENT_HOME ?? join(homedir(), '.healthagent')
-    ).normalize('NFC')
-  },
-  () => process.env.HEALTHAGENT_HOME,
-)
 
 
 /**

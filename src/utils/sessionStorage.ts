@@ -70,7 +70,7 @@ import { getCwd } from './cwd.js'
 import { logForDebugging } from './debug.js'
 import { logForDiagnosticsNoPII } from './diagLogs.js'
 import {
-  getClaudeConfigHomeDir,
+  getConfigHomeDir,
   getHealthAgentHomeDir,
   isEnvTruthy,
   isHealthAgentMode,
@@ -204,7 +204,7 @@ export function getProjectsDir(): string {
   if (isHealthAgentMode()) {
     return join(getHealthAgentHomeDir(), 'sessions')
   }
-  return join(getClaudeConfigHomeDir(), 'projects')
+  return join(getConfigHomeDir(), 'projects')
 }
 
 export function getTranscriptPath(): string {
@@ -530,7 +530,7 @@ export function resetProjectFlushStateForTesting(): void {
 
 /**
  * Reset the entire Project singleton for testing.
- * This ensures tests with different CLAUDE_CONFIG_DIR values
+ * This ensures tests with different HEALTHAGENT_HOME values
  * don't share stale sessionFile paths.
  */
 export function resetProjectForTesting(): void {
