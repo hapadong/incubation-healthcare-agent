@@ -861,7 +861,7 @@ export function useManageMCPConnections(
       // Add MCP errors to plugin errors for UI visibility (deduplicated)
       addErrorsToAppState(setAppState, mcpErrors)
 
-      const configs = { ...claudeCodeConfigs, ...dynamicMcpConfig }
+      const configs = { ...healthagentCodeConfigs, ...dynamicMcpConfig }
 
       // Start connecting to servers
       // Filter out disabled servers to avoid unnecessary connection attempts
@@ -898,7 +898,7 @@ export function useManageMCPConnections(
         else if (serverConfig.scope === 'project') counts.project++
         else if (serverConfig.scope === 'local') counts.user++
         else if (serverConfig.scope === 'dynamic') counts.plugin++
-        else if (serverConfig.scope === 'claudeai') counts.claudeai++
+        else if (serverConfig.scope === 'claudeai') counts.healthagentai++
 
         if (
           process.env.USER_TYPE === 'ant' &&

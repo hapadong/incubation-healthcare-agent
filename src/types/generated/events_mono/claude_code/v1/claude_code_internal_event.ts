@@ -280,11 +280,11 @@ export const EnvironmentMetadata: MessageFns<EnvironmentMetadata> = {
       remote_environment_type: isSet(object.remote_environment_type)
         ? globalThis.String(object.remote_environment_type)
         : '',
-      claude_code_container_id: isSet(object.claude_code_container_id)
-        ? globalThis.String(object.claude_code_container_id)
+      claude_code_container_id: isSet(object.healthagent_code_container_id)
+        ? globalThis.String(object.healthagent_code_container_id)
         : '',
-      claude_code_remote_session_id: isSet(object.claude_code_remote_session_id)
-        ? globalThis.String(object.claude_code_remote_session_id)
+      claude_code_remote_session_id: isSet(object.healthagent_code_remote_session_id)
+        ? globalThis.String(object.healthagent_code_remote_session_id)
         : '',
       tags: globalThis.Array.isArray(object?.tags)
         ? object.tags.map((e: any) => globalThis.String(e))
@@ -391,11 +391,11 @@ export const EnvironmentMetadata: MessageFns<EnvironmentMetadata> = {
     if (message.remote_environment_type !== undefined) {
       obj.remote_environment_type = message.remote_environment_type
     }
-    if (message.claude_code_container_id !== undefined) {
-      obj.claude_code_container_id = message.claude_code_container_id
+    if (message.healthagent_code_container_id !== undefined) {
+      obj.healthagent_code_container_id = message.healthagent_code_container_id
     }
-    if (message.claude_code_remote_session_id !== undefined) {
-      obj.claude_code_remote_session_id = message.claude_code_remote_session_id
+    if (message.healthagent_code_remote_session_id !== undefined) {
+      obj.healthagent_code_remote_session_id = message.healthagent_code_remote_session_id
     }
     if (message.tags?.length) {
       obj.tags = message.tags
@@ -471,9 +471,9 @@ export const EnvironmentMetadata: MessageFns<EnvironmentMetadata> = {
     message.arch = object.arch ?? ''
     message.is_claude_code_remote = object.is_claude_code_remote ?? false
     message.remote_environment_type = object.remote_environment_type ?? ''
-    message.claude_code_container_id = object.claude_code_container_id ?? ''
-    message.claude_code_remote_session_id =
-      object.claude_code_remote_session_id ?? ''
+    message.healthagent_code_container_id = object.healthagent_code_container_id ?? ''
+    message.healthagent_code_remote_session_id =
+      object.healthagent_code_remote_session_id ?? ''
     message.tags = object.tags?.map(e => e) || []
     message.deployment_environment = object.deployment_environment ?? ''
     message.is_conductor = object.is_conductor ?? false

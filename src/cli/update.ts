@@ -386,7 +386,7 @@ export async function update() {
       if (useLocalUpdate) {
         process.stderr.write('Try manually updating with:\n')
         process.stderr.write(
-          `  cd ~/.claude/local && npm update ${'@anthropic-ai/claude-code'}\n`,
+          `  cd ~/.healthagent/local && npm update ${'@anthropic-ai/claude-code'}\n`,
         )
       } else {
         process.stderr.write('Try running with sudo or fix npm permissions\n')
@@ -401,7 +401,7 @@ export async function update() {
       if (useLocalUpdate) {
         process.stderr.write('Try manually updating with:\n')
         process.stderr.write(
-          `  cd ~/.claude/local && npm update ${'@anthropic-ai/claude-code'}\n`,
+          `  cd ~/.healthagent/local && npm update ${'@anthropic-ai/claude-code'}\n`,
         )
       } else {
         process.stderr.write(

@@ -82,7 +82,7 @@ const DEFAULT_API_KEY_HELPER_TTL = 5 * 60 * 1000
 
 /**
  * CCR and Claude Desktop spawn the CLI with OAuth and should never fall back
- * to the user's ~/.claude/settings.json API-key config (apiKeyHelper,
+ * to the user's ~/.healthagent/settings.json API-key config (apiKeyHelper,
  * env.ANTHROPIC_API_KEY, env.ANTHROPIC_AUTH_TOKEN). Those settings exist for
  * the user's terminal CLI, not managed sessions. Without this guard, a user
  * who runs `claude` in their terminal with an API key sees every CCD session
@@ -108,7 +108,7 @@ export function isAnthropicAuthEnabled(): boolean {
   // local auth-injecting proxy. The launcher sets CLAUDE_CODE_OAUTH_TOKEN as a
   // placeholder iff the local side is a subscriber (so the remote includes the
   // oauth-2025 beta header to match what the proxy will inject). The remote's
-  // ~/.claude settings (apiKeyHelper, settings.env.ANTHROPIC_API_KEY) MUST NOT
+  // ~/.healthagent settings (apiKeyHelper, settings.env.ANTHROPIC_API_KEY) MUST NOT
   // flip this — they'd cause a header mismatch with the proxy and a bogus
   // "invalid x-api-key" from the API. See src/ssh/sshAuthProxy.ts.
   if (process.env.ANTHROPIC_UNIX_SOCKET) {
@@ -353,7 +353,7 @@ export function getAnthropicApiKeyWithSource(
 /**
  * Get the configured apiKeyHelper from settings.
  * In bare mode, only the --settings flag source is consulted — apiKeyHelper
- * from ~/.claude/settings.json or project settings is ignored.
+ * from ~/.healthagent/settings.json or project settings is ignored.
  */
 export function getConfiguredApiKeyHelper(): string | undefined {
   if (isBareMode()) {
@@ -690,7 +690,7 @@ export function refreshAwsAuth(awsAuthRefresh: string): Promise<boolean> {
               'AWS auth refresh timed out after 3 minutes. Run your auth command manually in a separate terminal.',
             )
           : chalk.red(
-              'Error running awsAuthRefresh (in settings or ~/.claude.json):',
+              'Error running awsAuthRefresh (in settings or ~/.healthagent.json):',
             )
         // biome-ignore lint/suspicious/noConsole:: intentional console output
         console.error(message)
@@ -768,7 +768,7 @@ async function getAwsCredsFromCredentialExport(): Promise<{
       }
     } catch (e) {
       const message = chalk.red(
-        'Error getting AWS credentials from awsCredentialExport (in settings or ~/.claude.json):',
+        'Error getting AWS credentials from awsCredentialExport (in settings or ~/.healthagent.json):',
       )
       if (e instanceof Error) {
         // biome-ignore lint/suspicious/noConsole:: intentional console output
@@ -958,7 +958,7 @@ export function refreshGcpAuth(gcpAuthRefresh: string): Promise<boolean> {
               'GCP auth refresh timed out after 3 minutes. Run your auth command manually in a separate terminal.',
             )
           : chalk.red(
-              'Error running gcpAuthRefresh (in settings or ~/.claude.json):',
+              'Error running gcpAuthRefresh (in settings or ~/.healthagent.json):',
             )
         // biome-ignore lint/suspicious/noConsole:: intentional console output
         console.error(message)
@@ -1215,9 +1215,9 @@ export function saveOAuthTokensIfNeeded(tokens: OAuthTokens): {
 
   try {
     const storageData = secureStorage.read() || {}
-    const existingOauth = storageData.claudeAiOauth
+    const existingOauth = storageData.healthagentAiOauth
 
-    storageData.claudeAiOauth = {
+    storageData.healthagentAiOauth = {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       expiresAt: tokens.expiresAt,
@@ -1289,7 +1289,7 @@ export const getClaudeAIOAuthTokens = memoize((): OAuthTokens | null => {
   try {
     const secureStorage = getSecureStorage()
     const storageData = secureStorage.read()
-    const oauthData = storageData?.claudeAiOauth
+    const oauthData = storageData?.healthagentAiOauth
 
     if (!oauthData?.accessToken) {
       return null
@@ -1413,7 +1413,7 @@ export async function getClaudeAIOAuthTokensAsync(): Promise<OAuthTokens | null>
   try {
     const secureStorage = getSecureStorage()
     const storageData = await secureStorage.readAsync()
-    const oauthData = storageData?.claudeAiOauth
+    const oauthData = storageData?.healthagentAiOauth
     if (!oauthData?.accessToken) {
       return null
     }
@@ -1946,7 +1946,7 @@ export async function validateForceLoginOrg(): Promise<OrgValidationResult> {
 
   // Always fetch the authoritative org UUID from the profile endpoint.
   // Even keychain-sourced tokens verify server-side: the cached org UUID
-  // in ~/.claude.json is user-writable and cannot be trusted.
+  // in ~/.healthagent.json is user-writable and cannot be trusted.
   const { source } = getAuthTokenSource()
   const isEnvVarToken =
     source === 'CLAUDE_CODE_OAUTH_TOKEN' ||

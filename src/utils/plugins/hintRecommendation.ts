@@ -5,7 +5,7 @@
  * by file edits, plugin hints are triggered by CLIs/SDKs emitting a
  * `<claude-code-hint />` tag to stderr (detected by the Bash/PowerShell tools).
  *
- * State persists in GlobalConfig.claudeCodeHints — a show-once record per
+ * State persists in GlobalConfig.healthagentCodeHints — a show-once record per
  * plugin and a disabled flag (user picked "don't show again"). Official-
  * marketplace filtering is hardcoded for v1.
  */
@@ -66,7 +66,7 @@ export function maybeRecordPluginHint(hint: ClaudeCodeHint): void {
   if (!getFeatureValue_CACHED_MAY_BE_STALE('tengu_lapis_finch', false)) return
   if (hasShownHintThisSession()) return
 
-  const state = getGlobalConfig().claudeCodeHints
+  const state = getGlobalConfig().healthagentCodeHints
   if (state?.disabled) return
 
   const shown = state?.plugin ?? []
@@ -140,12 +140,12 @@ export async function resolvePluginHint(
  */
 export function markHintPluginShown(pluginId: string): void {
   saveGlobalConfig(current => {
-    const existing = current.claudeCodeHints?.plugin ?? []
+    const existing = current.healthagentCodeHints?.plugin ?? []
     if (existing.includes(pluginId)) return current
     return {
       ...current,
       claudeCodeHints: {
-        ...current.claudeCodeHints,
+        ...current.healthagentCodeHints,
         plugin: [...existing, pluginId],
       },
     }
@@ -155,10 +155,10 @@ export function markHintPluginShown(pluginId: string): void {
 /** Called when the user picks "don't show plugin installation hints again". */
 export function disableHintRecommendations(): void {
   saveGlobalConfig(current => {
-    if (current.claudeCodeHints?.disabled) return current
+    if (current.healthagentCodeHints?.disabled) return current
     return {
       ...current,
-      claudeCodeHints: { ...current.claudeCodeHints, disabled: true },
+      claudeCodeHints: { ...current.healthagentCodeHints, disabled: true },
     }
   })
 }

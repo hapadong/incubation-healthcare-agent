@@ -254,18 +254,18 @@ export function convertToSandboxRuntimeConfig(
   const cwd = getCwdState()
   const originalCwd = getOriginalCwd()
   if (cwd !== originalCwd) {
-    denyWrite.push(resolve(cwd, '.claude', 'settings.json'))
-    denyWrite.push(resolve(cwd, '.claude', 'settings.local.json'))
+    denyWrite.push(resolve(cwd, '.healthagent', 'settings.json'))
+    denyWrite.push(resolve(cwd, '.healthagent', 'settings.local.json'))
   }
 
-  // Block writes to .claude/skills in both original and current working directories.
-  // The sandbox-runtime's getDangerousDirectories() protects .claude/commands and
-  // .claude/agents but not .claude/skills. Skills have the same privilege level
+  // Block writes to .healthagent/skills in both original and current working directories.
+  // The sandbox-runtime's getDangerousDirectories() protects .healthagent/commands and
+  // .healthagent/agents but not .healthagent/skills. Skills have the same privilege level
   // (auto-discovered, auto-loaded, full Claude capabilities) so they need the
   // same OS-level sandbox protection.
-  denyWrite.push(resolve(originalCwd, '.claude', 'skills'))
+  denyWrite.push(resolve(originalCwd, '.healthagent', 'skills'))
   if (cwd !== originalCwd) {
-    denyWrite.push(resolve(cwd, '.claude', 'skills'))
+    denyWrite.push(resolve(cwd, '.healthagent', 'skills'))
   }
 
   // SECURITY: Git's is_git_directory() treats cwd as a bare repo if it has

@@ -211,7 +211,7 @@ export function getDefaultMainLoopModel(): ModelName {
 /**
  * Pure string-match that strips date/provider suffixes from a first-party model
  * name. Input must already be a 1P-format ID (e.g. 'claude-3-7-sonnet-20250219',
- * 'us.anthropic.claude-opus-4-6-v1:0'). Does not touch settings, so safe at
+ * 'us.anthropic.healthagent-opus-4-6-v1:0'). Does not touch settings, so safe at
  * module top-level (see MODEL_COSTS in modelCost.ts).
  */
 export function firstPartyNameToCanonical(name: ModelName): ModelShortName {
@@ -271,7 +271,7 @@ export function firstPartyNameToCanonical(name: ModelName): ModelShortName {
 
 /**
  * Maps a full model string to a shorter canonical version that's unified across 1P and 3P providers.
- * For example, 'claude-3-5-haiku-20241022' and 'us.anthropic.claude-3-5-haiku-20241022-v1:0'
+ * For example, 'claude-3-5-haiku-20241022' and 'us.anthropic.healthagent-3-5-haiku-20241022-v1:0'
  * would both be mapped to 'claude-3-5-haiku'.
  * @param fullModelName The full model name (e.g., 'claude-3-5-haiku-20241022')
  * @returns The short name (e.g., 'claude-3-5-haiku') if found, or the original name if no mapping exists

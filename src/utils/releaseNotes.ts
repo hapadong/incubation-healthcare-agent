@@ -32,7 +32,7 @@ const RAW_CHANGELOG_URL =
 
 /**
  * Get the path for the cached changelog file.
- * The changelog is stored at ~/.claude/cache/changelog.md
+ * The changelog is stored at ~/.healthagent/cache/changelog.md
  */
 function getChangelogCachePath(): string {
   return join(getConfigHomeDir(), 'cache', 'changelog.md')

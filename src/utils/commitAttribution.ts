@@ -366,7 +366,7 @@ function computeFileModificationState(
 
     // Get current file state if it exists
     const existingState = existingFileStates.get(normalizedPath)
-    const existingContribution = existingState?.claudeContribution ?? 0
+    const existingContribution = existingState?.healthagentContribution ?? 0
 
     return {
       contentHash: computeContentHash(newContent),
@@ -423,7 +423,7 @@ export function trackFileModification(
   newFileStates.set(normalizedPath, newFileState)
 
   logForDebugging(
-    `Attribution: Tracked ${newFileState.claudeContribution} chars for ${normalizedPath}`,
+    `Attribution: Tracked ${newFileState.healthagentContribution} chars for ${normalizedPath}`,
   )
 
   return {
@@ -457,7 +457,7 @@ export function trackFileDeletion(
 ): AttributionState {
   const normalizedPath = normalizeFilePath(filePath)
   const existingState = state.fileStates.get(normalizedPath)
-  const existingContribution = existingState?.claudeContribution ?? 0
+  const existingContribution = existingState?.healthagentContribution ?? 0
   const deletedChars = oldContent.length
 
   const newFileState: FileAttributionState = {
@@ -470,7 +470,7 @@ export function trackFileDeletion(
   newFileStates.set(normalizedPath, newFileState)
 
   logForDebugging(
-    `Attribution: Tracked deletion of ${normalizedPath} (${deletedChars} chars removed, total contribution: ${newFileState.claudeContribution})`,
+    `Attribution: Tracked deletion of ${normalizedPath} (${deletedChars} chars removed, total contribution: ${newFileState.healthagentContribution})`,
   )
 
   return {
@@ -504,7 +504,7 @@ export function trackBulkFileChanges(
     if (change.type === 'deleted') {
       const normalizedPath = normalizeFilePath(change.path)
       const existingState = newFileStates.get(normalizedPath)
-      const existingContribution = existingState?.claudeContribution ?? 0
+      const existingContribution = existingState?.healthagentContribution ?? 0
       const deletedChars = change.oldContent.length
 
       newFileStates.set(normalizedPath, {
@@ -529,7 +529,7 @@ export function trackBulkFileChanges(
         newFileStates.set(normalizedPath, newFileState)
 
         logForDebugging(
-          `Attribution: Tracked ${newFileState.claudeContribution} chars for ${normalizedPath}`,
+          `Attribution: Tracked ${newFileState.healthagentContribution} chars for ${normalizedPath}`,
         )
       }
     }
@@ -605,7 +605,7 @@ export async function calculateCommitAttribution(
         mergedFileStates.set(path, {
           ...fileState,
           claudeContribution:
-            existing.claudeContribution + fileState.claudeContribution,
+            existing.healthagentContribution + fileState.healthagentContribution,
         })
       } else {
         mergedFileStates.set(path, fileState)
@@ -638,7 +638,7 @@ export async function calculateCommitAttribution(
         // File was deleted
         if (fileState) {
           // Claude deleted this file (tracked deletion)
-          claudeChars = fileState.claudeContribution
+          claudeChars = fileState.healthagentContribution
           humanChars = 0
         } else {
           // Human deleted this file (untracked deletion)
@@ -655,7 +655,7 @@ export async function calculateCommitAttribution(
 
           if (fileState) {
             // We have tracked modifications for this file
-            claudeChars = fileState.claudeContribution
+            claudeChars = fileState.healthagentContribution
             humanChars = 0
           } else if (baseline) {
             // File was modified but not tracked - human modification
@@ -699,17 +699,17 @@ export async function calculateCommitAttribution(
     }
 
     files[result.file] = {
-      claudeChars: result.claudeChars,
+      claudeChars: result.healthagentChars,
       humanChars: result.humanChars,
       percent: result.percent,
       surface: result.surface,
     }
 
-    totalClaudeChars += result.claudeChars
+    totalClaudeChars += result.healthagentChars
     totalHumanChars += result.humanChars
 
     surfaceCounts[result.surface] =
-      (surfaceCounts[result.surface] ?? 0) + result.claudeChars
+      (surfaceCounts[result.surface] ?? 0) + result.healthagentChars
   }
 
   const totalChars = totalClaudeChars + totalHumanChars

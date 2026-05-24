@@ -348,7 +348,7 @@ export async function getEnhancedPRAttribution(
       isInternalModelRepo(),
     ])
 
-  const claudePercent = attributionData?.summary.claudePercent ?? 0
+  const claudePercent = attributionData?.summary.healthagentPercent ?? 0
 
   logForDebugging(
     `PR Attribution: claudePercent: ${claudePercent}, promptCount: ${promptCount}, memoryAccessCount: ${memoryAccessCount}`,

@@ -8,13 +8,13 @@
  * - Track and update marketplace configurations
  *
  * File structure managed by this module:
- * ~/.claude/
+ * ~/.healthagent/
  *   └── plugins/
  *       ├── known_marketplaces.json    # Configuration of all known marketplaces
  *       └── marketplaces/              # Cache directory for marketplace data
  *           ├── my-marketplace.json    # Cached marketplace from URL source
  *           └── github-marketplace/    # Cloned repository for GitHub source
- *               └── .claude-plugin/
+ *               └── .healthagent-plugin/
  *                   └── marketplace.json
  */
 
@@ -239,7 +239,7 @@ export function saveMarketplaceToSettings(
 /**
  * Load known marketplaces configuration from disk
  *
- * Reads the configuration file at ~/.claude/plugins/known_marketplaces.json
+ * Reads the configuration file at ~/.healthagent/plugins/known_marketplaces.json
  * which contains a mapping of marketplace names to their sources and metadata.
  *
  * Example configuration file content:
@@ -247,12 +247,12 @@ export function saveMarketplaceToSettings(
  * {
  *   "official-marketplace": {
  *     "source": { "source": "url", "url": "https://example.com/marketplace.json" },
- *     "installLocation": "/Users/me/.claude/plugins/marketplaces/official-marketplace.json",
+ *     "installLocation": "/Users/me/.healthagent/plugins/marketplaces/official-marketplace.json",
  *     "lastUpdated": "2024-01-15T10:30:00.000Z"
  *   },
  *   "company-plugins": {
  *     "source": { "source": "github", "repo": "mycompany/plugins" },
- *     "installLocation": "/Users/me/.claude/plugins/marketplaces/company-plugins",
+ *     "installLocation": "/Users/me/.healthagent/plugins/marketplaces/company-plugins",
  *     "lastUpdated": "2024-01-14T15:45:00.000Z"
  *   }
  * }
@@ -318,7 +318,7 @@ export async function loadKnownMarketplacesConfigSafe(): Promise<KnownMarketplac
 /**
  * Save known marketplaces configuration to disk
  *
- * Writes the configuration to ~/.claude/plugins/known_marketplaces.json,
+ * Writes the configuration to ~/.healthagent/plugins/known_marketplaces.json,
  * creating the directory structure if it doesn't exist.
  *
  * @param config - The marketplace configuration to save
@@ -1069,7 +1069,7 @@ export async function reconcileSparseCheckout(
  * Example repository structure:
  * ```
  * my-marketplace/
- *   ├── .claude-plugin/
+ *   ├── .healthagent-plugin/
  *   │   └── marketplace.json    # Default location for marketplace manifest
  *   ├── plugins/                # Plugin implementations
  *   └── README.md
@@ -1408,7 +1408,7 @@ async function parseFileWithSchema<T>(
  *
  * Handles different source types:
  * - URL: Downloads marketplace.json directly
- * - GitHub: Clones repo and looks for .claude-plugin/marketplace.json
+ * - GitHub: Clones repo and looks for .healthagent-plugin/marketplace.json
  * - Git: Clones repository from git URL
  * - NPM: (Not yet implemented) Would fetch from npm package
  * - File: Reads from local filesystem
@@ -1417,10 +1417,10 @@ async function parseFileWithSchema<T>(
  * to match the marketplace's actual name from the manifest.
  *
  * Cache structure:
- * ~/.claude/plugins/marketplaces/
+ * ~/.healthagent/plugins/marketplaces/
  *   ├── official-marketplace.json     # From URL source
  *   ├── github-marketplace/          # From GitHub/Git source
- *   │   └── .claude-plugin/
+ *   │   └── .healthagent-plugin/
  *   │       └── marketplace.json
  *   └── local-marketplace.json       # From file source
  *
@@ -1592,7 +1592,7 @@ async function loadAndCacheMarketplace(
 
         marketplacePath = join(
           temporaryCachePath,
-          source.path || '.claude-plugin/marketplace.json',
+          source.path || '.healthagent-plugin/marketplace.json',
         )
         break
       }
@@ -1609,7 +1609,7 @@ async function loadAndCacheMarketplace(
         )
         marketplacePath = join(
           temporaryCachePath,
-          source.path || '.claude-plugin/marketplace.json',
+          source.path || '.healthagent-plugin/marketplace.json',
         )
         break
       }
@@ -1621,8 +1621,8 @@ async function loadAndCacheMarketplace(
 
       case 'file': {
         // For local files, resolve paths relative to marketplace root directory
-        // File sources point to .claude-plugin/marketplace.json, so the marketplace
-        // root is two directories up (parent of .claude-plugin/)
+        // File sources point to .healthagent-plugin/marketplace.json, so the marketplace
+        // root is two directories up (parent of .healthagent-plugin/)
         // Resolve to absolute so error messages show the actual path checked
         // (legacy known_marketplaces.json entries may have relative paths)
         const absPath = resolve(source.path)
@@ -1633,11 +1633,11 @@ async function loadAndCacheMarketplace(
       }
 
       case 'directory': {
-        // For directories, look for .claude-plugin/marketplace.json
+        // For directories, look for .healthagent-plugin/marketplace.json
         // Resolve to absolute so error messages show the actual path checked
         // (legacy known_marketplaces.json entries may have relative paths)
         const absPath = resolve(source.path)
-        marketplacePath = join(absPath, '.claude-plugin', 'marketplace.json')
+        marketplacePath = join(absPath, '.healthagent-plugin', 'marketplace.json')
         temporaryCachePath = absPath
         cleanupNeeded = false
         break
@@ -1659,7 +1659,7 @@ async function loadAndCacheMarketplace(
         temporaryCachePath = join(cacheDir, source.name)
         marketplacePath = join(
           temporaryCachePath,
-          '.claude-plugin',
+          '.healthagent-plugin',
           'marketplace.json',
         )
         cleanupNeeded = false
@@ -1770,7 +1770,7 @@ async function loadAndCacheMarketplace(
  * Add a marketplace source to the known marketplaces
  *
  * The marketplace is fetched, validated, and cached locally.
- * The configuration is saved to ~/.claude/plugins/known_marketplaces.json.
+ * The configuration is saved to ~/.healthagent/plugins/known_marketplaces.json.
  *
  * @param source - MarketplaceSource object representing the marketplace source.
  *                 Callers should parse user input into MarketplaceSource format
@@ -2057,11 +2057,11 @@ export async function removeMarketplaceSource(name: string): Promise<void> {
 async function readCachedMarketplace(
   installLocation: string,
 ): Promise<PluginMarketplace> {
-  // For git-sourced directories, the manifest lives at .claude-plugin/marketplace.json.
+  // For git-sourced directories, the manifest lives at .healthagent-plugin/marketplace.json.
   // For url/file/directory sources it is the installLocation itself.
   // Try the nested path first; fall back to installLocation when it is a plain file
   // (ENOTDIR) or the nested file is simply missing (ENOENT).
-  const nestedPath = join(installLocation, '.claude-plugin', 'marketplace.json')
+  const nestedPath = join(installLocation, '.healthagent-plugin', 'marketplace.json')
   try {
     return await parseFileWithSchema(nestedPath, PluginMarketplaceSchema())
   } catch (e) {
