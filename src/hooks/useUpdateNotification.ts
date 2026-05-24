@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { major, minor, patch } from 'semver'
+import { HA_VERSION } from '../constants/version.js'
 
 export function getSemverPart(version: string): string {
   return `${major(version, { loose: true })}.${minor(version, { loose: true })}.${patch(version, { loose: true })}`
@@ -15,7 +16,7 @@ export function shouldShowUpdateNotification(
 
 export function useUpdateNotification(
   updatedVersion: string | null | undefined,
-  initialVersion: string = '2.1.88',
+  initialVersion: string = HA_VERSION,
 ): string | null {
   const [lastNotifiedSemver, setLastNotifiedSemver] = useState<string | null>(
     () => getSemverPart(initialVersion),

@@ -5,6 +5,8 @@
  * import without pulling in auth.ts and its transitive dependency tree.
  */
 
+import { HA_VERSION } from '../constants/version.js'
+
 export function getClaudeCodeUserAgent(): string {
-  return `claude-code/${'2.1.88'}`
+  return `claude-code/${HA_VERSION}`
 }

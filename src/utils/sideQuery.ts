@@ -1,5 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { BetaToolUnion } from '@anthropic-ai/sdk/resources/beta/messages.js'
+import { HA_VERSION } from '../constants/version.js'
 import {
   getLastApiCompletionTimestamp,
   setLastApiCompletionTimestamp,
@@ -140,7 +141,7 @@ export async function sideQuery(opts: SideQueryOptions): Promise<BetaMessage> {
   const messageText = extractFirstUserMessageText(messages)
 
   // Compute fingerprint for OAuth attribution
-  const fingerprint = computeFingerprint(messageText, '2.1.88')
+  const fingerprint = computeFingerprint(messageText, HA_VERSION)
   const attributionHeader = getAttributionHeader(fingerprint)
 
   // Build system as array to keep attribution header in its own block

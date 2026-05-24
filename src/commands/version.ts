@@ -1,11 +1,12 @@
 import type { Command, LocalCommandCall } from '../types/command.js'
+import { HA_VERSION } from '../constants/version.js'
 
 const call: LocalCommandCall = async () => {
   return {
     type: 'text',
     value: '2026-04-01T06:30:25.799Z'
-      ? `${'2.1.88'} (built ${'2026-04-01T06:30:25.799Z'})`
-      : '2.1.88',
+      ? `${HA_VERSION} (built ${'2026-04-01T06:30:25.799Z'})`
+      : HA_VERSION,
   }
 }
 

@@ -169,22 +169,15 @@ export function ThemePicker(t0) {
   } else {
     t14 = $[15];
   }
-  let t15;
-  if ($[16] !== setPreviewTheme) {
-    t15 = setting => {
-      setPreviewTheme(setting as ThemeSetting);
-    };
-    $[16] = setPreviewTheme;
-    $[17] = t15;
-  } else {
-    t15 = $[17];
-  }
+  const t15 = undefined;
   let t16;
-  if ($[18] !== onThemeSelect || $[19] !== savePreview) {
+  if ($[18] !== onThemeSelect || $[19] !== savePreview || $[16] !== setPreviewTheme) {
     t16 = setting_0 => {
+      setPreviewTheme(setting_0 as ThemeSetting);
       savePreview();
       onThemeSelect(setting_0 as ThemeSetting);
     };
+    $[16] = setPreviewTheme;
     $[18] = onThemeSelect;
     $[19] = savePreview;
     $[20] = t16;
@@ -208,9 +201,8 @@ export function ThemePicker(t0) {
     t17 = $[24];
   }
   let t18;
-  if ($[25] !== t15 || $[26] !== t16 || $[27] !== t17 || $[28] !== themeSetting) {
-    t18 = <Select options={themeOptions} onFocus={t15} onChange={t16} onCancel={t17} visibleOptionCount={themeOptions.length} defaultValue={themeSetting} defaultFocusValue={themeSetting} />;
-    $[25] = t15;
+  if ($[26] !== t16 || $[27] !== t17 || $[28] !== themeSetting) {
+    t18 = <Select options={themeOptions} onChange={t16} onCancel={t17} visibleOptionCount={themeOptions.length} defaultValue={themeSetting} defaultFocusValue={themeSetting} />;
     $[26] = t16;
     $[27] = t17;
     $[28] = themeSetting;

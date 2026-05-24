@@ -44,7 +44,7 @@ import {
   getConditionalRulesForCwdLevelDirectory,
   type MemoryFileInfo,
 } from './claudemd.js'
-import { dirname, parse, relative, resolve } from 'path'
+import { dirname, parse, resolve } from 'path'
 import { getCwd } from 'src/utils/cwd.js'
 import { getViewedTeammateTask } from '../state/selectors.js'
 import { logError } from './log.js'
@@ -116,6 +116,7 @@ import {
 } from './abortController.js'
 import { isAbortError } from './errors.js'
 import {
+  getDisplayPath,
   getFileModificationTimeAsync,
   isFileWithinReadSizeLimit,
 } from './file.js'
@@ -1638,7 +1639,7 @@ async function getSelectedLinesFromIDE(
       lineEnd: ideSelection.lineStart + ideSelection.lineCount - 1,
       filename: ideSelection.filePath,
       content: ideSelection.text,
-      displayPath: relative(getCwd(), ideSelection.filePath),
+      displayPath: getDisplayPath(ideSelection.filePath),
     },
   ]
 }
@@ -1727,7 +1728,7 @@ export function memoryFilesToAttachments(
         type: 'nested_memory',
         path: memoryFile.path,
         content: memoryFile,
-        displayPath: relative(getCwd(), memoryFile.path),
+        displayPath: getDisplayPath(memoryFile.path),
       })
       toolUseContext.loadedNestedMemoryPaths?.add(memoryFile.path)
 
@@ -1934,7 +1935,7 @@ async function processAtMentionedFiles(
                 type: 'directory' as const,
                 path: absoluteFilename,
                 content: stdout,
-                displayPath: relative(getCwd(), absoluteFilename),
+                displayPath: getDisplayPath(absoluteFilename),
               }
             } catch {
               return null
@@ -2589,7 +2590,7 @@ async function getDynamicSkillAttachments(
           type: 'dynamic_skill',
           skillDir,
           skillNames,
-          displayPath: relative(getCwd(), skillDir),
+          displayPath: getDisplayPath(skillDir),
         })
       }
     }
@@ -3008,7 +3009,7 @@ export async function tryGetPDFReference(
         filename,
         pageCount: effectivePageCount,
         fileSize: stats.size,
-        displayPath: relative(getCwd(), filename),
+        displayPath: getDisplayPath(filename),
       }
     }
   } catch {
@@ -3099,7 +3100,7 @@ export async function generateFileAttachment(
         return {
           type: 'already_read_file',
           filename,
-          displayPath: relative(getCwd(), filename),
+          displayPath: getDisplayPath(filename),
           content: {
             type: 'text',
             file: {
@@ -3135,7 +3136,7 @@ export async function generateFileAttachment(
         return {
           type: 'compact_file_reference',
           filename,
-          displayPath: relative(getCwd(), filename),
+          displayPath: getDisplayPath(filename),
         }
       }
 
@@ -3160,7 +3161,7 @@ export async function generateFileAttachment(
           filename,
           content: result.data,
           truncated: true,
-          displayPath: relative(getCwd(), filename),
+          displayPath: getDisplayPath(filename),
         }
       } catch {
         logEvent(errorEventName, {})
@@ -3181,7 +3182,7 @@ export async function generateFileAttachment(
         type: 'file',
         filename,
         content: result.data,
-        displayPath: relative(getCwd(), filename),
+        displayPath: getDisplayPath(filename),
       }
     } catch (error) {
       if (

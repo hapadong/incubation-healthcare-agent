@@ -1,5 +1,6 @@
 import { c as _c } from "react/compiler-runtime";
 import * as React from 'react';
+import { HA_VERSION } from '../../constants/version.js';
 import { useExitOnCtrlCDWithKeybindings } from 'src/hooks/useExitOnCtrlCDWithKeybindings.js';
 import { useShortcutDisplay } from 'src/keybindings/useShortcutDisplay.js';
 import { builtInCommandNames, type Command, type CommandResultDisplay, INTERNAL_ONLY_COMMANDS } from '../../commands.js';
@@ -138,7 +139,7 @@ export function HelpV2(t0) {
   const t5 = insideModal ? undefined : maxHeight;
   let t6;
   if ($[31] !== tabs) {
-    t6 = <Tabs title={false ? "/help" : ((process.env.HEALTHAGENT_API_BASE_URL || process.argv[1]?.includes('ha')) ? `Verity Health Agent v${process.env.HEALTHAGENT_VERSION ?? '0.1.0'}` : `Claude Code v${'2.1.88'}`)} color="professionalBlue" defaultTab="general">{tabs}</Tabs>;
+    t6 = <Tabs title={false ? "/help" : ((process.env.HEALTHAGENT_API_BASE_URL || process.argv[1]?.includes('ha')) ? `Verity Health Agent v${process.env.HEALTHAGENT_VERSION ?? '0.1.0'}` : `Claude Code v${HA_VERSION}`)} color="professionalBlue" defaultTab="general">{tabs}</Tabs>;
     $[31] = tabs;
     $[32] = t6;
   } else {

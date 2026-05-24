@@ -1,5 +1,6 @@
 import { c as _c } from "react/compiler-runtime";
 import figures from 'figures';
+import { HA_VERSION } from '../../constants/version.js';
 import * as React from 'react';
 import { Suspense, use } from 'react';
 import { getSessionId } from '../../bootstrap/state.js';
@@ -22,7 +23,7 @@ function buildPrimarySection(): Property[] {
   const nameValue = customTitle ?? <Text dimColor>/rename to add a name</Text>;
   return [{
     label: 'Version',
-    value: '2.1.88'
+    value: HA_VERSION
   }, {
     label: 'Session name',
     value: nameValue

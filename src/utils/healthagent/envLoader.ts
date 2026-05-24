@@ -15,8 +15,8 @@ export function loadHealthAgentEnv(): void {
   const localPath = resolve(process.cwd(), '.env')
   const globalPath = join(homedir(), '.healthagent', '.env')
 
-  if (existsSync(localPath)) dotenvConfig({ path: localPath })
-  if (existsSync(globalPath)) dotenvConfig({ path: globalPath })
+  if (existsSync(localPath)) dotenvConfig({ path: localPath, quiet: true })
+  if (existsSync(globalPath)) dotenvConfig({ path: globalPath, quiet: true })
 }
 
 /**

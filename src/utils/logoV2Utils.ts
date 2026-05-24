@@ -1,4 +1,5 @@
 import { getDirectConnectServerUrl, getSessionId } from '../bootstrap/state.js'
+import { HA_VERSION } from '../constants/version.js'
 import { stringWidth } from '../ink/stringWidth.js'
 import type { LogOption } from '../types/logs.js'
 import { getSubscriptionName, isClaudeAISubscriber } from './auth.js'
@@ -262,7 +263,7 @@ export function getLogoDisplayData(): {
   const appName = isHealthAgent ? 'Verity Health Agent' : 'Claude Code'
   const version = isHealthAgent
     ? (process.env.HEALTHAGENT_VERSION ?? '0.1.0')
-    : (process.env.DEMO_VERSION ?? '2.1.88')
+    : (process.env.DEMO_VERSION ?? HA_VERSION)
   const serverUrl = getDirectConnectServerUrl()
   const displayPath = process.env.DEMO_VERSION
     ? '/code/claude'

@@ -1,6 +1,7 @@
 import { execa } from 'execa'
 import memoize from 'lodash-es/memoize.js'
 import { getSessionId } from '../bootstrap/state.js'
+import { HA_VERSION } from '../constants/version.js'
 import {
   getOauthAccountInfo,
   getRateLimitTier,
@@ -105,7 +106,7 @@ export const getCoreUserData = memoize(
       deviceId,
       sessionId: getSessionId(),
       email: getEmail(),
-      appVersion: '2.1.88',
+      appVersion: HA_VERSION,
       platform: getHostPlatformForAnalytics(),
       organizationUuid,
       accountUuid,

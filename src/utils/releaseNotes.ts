@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { mkdir, readFile, writeFile } from 'fs/promises'
+import { HA_VERSION } from '../constants/version.js'
 import { dirname, join } from 'path'
 import { coerce } from 'semver'
 import { getIsNonInteractiveSession } from '../bootstrap/state.js'
@@ -281,12 +282,12 @@ export function getAllReleaseNotes(
  * Also triggers a fetch of the latest changelog if the version has changed.
  *
  * @param lastSeenVersion The last version of release notes the user has seen
- * @param currentVersion The current application version, defaults to '2.1.88'
+ * @param currentVersion The current application version, defaults to HA_VERSION
  * @returns An object with hasReleaseNotes and the releaseNotes content
  */
 export async function checkForReleaseNotes(
   lastSeenVersion: string | null | undefined,
-  currentVersion: string = '2.1.88',
+  currentVersion: string = HA_VERSION,
 ): Promise<{ hasReleaseNotes: boolean; releaseNotes: string[] }> {
   // For Ant builds, use VERSION_CHANGELOG bundled at build time
   if (process.env.USER_TYPE === 'ant') {
@@ -334,7 +335,7 @@ export async function checkForReleaseNotes(
  */
 export function checkForReleaseNotesSync(
   lastSeenVersion: string | null | undefined,
-  currentVersion: string = '2.1.88',
+  currentVersion: string = HA_VERSION,
 ): { hasReleaseNotes: boolean; releaseNotes: string[] } {
   // For Ant builds, use VERSION_CHANGELOG bundled at build time
   if (process.env.USER_TYPE === 'ant') {

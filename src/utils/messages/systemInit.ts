@@ -1,5 +1,6 @@
 import { feature } from '../../stubs/bun-bundle.js'
 import { randomUUID } from 'crypto'
+import { HA_VERSION } from '../../constants/version.js'
 import { getSdkBetas, getSessionId } from 'src/bootstrap/state.js'
 import { DEFAULT_OUTPUT_STYLE_NAME } from 'src/constants/outputStyles.js'
 import type {
@@ -71,7 +72,7 @@ export function buildSystemInitMessage(inputs: SystemInitInputs): SDKMessage {
       .map(c => c.name),
     apiKeySource: getAnthropicApiKeyWithSource().source as ApiKeySource,
     betas: getSdkBetas(),
-    claude_code_version: '2.1.88',
+    claude_code_version: HA_VERSION,
     output_style: outputStyle,
     agents: inputs.agents.map(agent => agent.agentType),
     skills: inputs.skills

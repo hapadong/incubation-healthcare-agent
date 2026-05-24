@@ -1,5 +1,6 @@
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import axios from 'axios'
+import { HA_VERSION } from '../constants/version.js'
 import { execa } from 'execa'
 import capitalize from 'lodash-es/capitalize.js'
 import memoize from 'lodash-es/memoize.js'
@@ -925,7 +926,7 @@ function getInstallationEnv(): NodeJS.ProcessEnv | undefined {
 }
 
 function getClaudeCodeVersion() {
-  return '2.1.88'
+  return HA_VERSION
 }
 
 async function getInstalledVSCodeExtensionVersion(

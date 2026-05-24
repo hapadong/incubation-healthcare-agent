@@ -1,5 +1,6 @@
 import { feature } from '../../stubs/bun-bundle.js'
 import { randomBytes } from 'crypto'
+import { HA_VERSION } from '../../constants/version.js'
 import ignore from 'ignore'
 import memoize from 'lodash-es/memoize.js'
 import { homedir, tmpdir } from 'os'
@@ -365,7 +366,7 @@ export const getClaudeTempDir = memoize(function getClaudeTempDir(): string {
 export const getBundledSkillsRoot = memoize(
   function getBundledSkillsRoot(): string {
     const nonce = randomBytes(16).toString('hex')
-    return join(getClaudeTempDir(), 'bundled-skills', '2.1.88', nonce)
+    return join(getClaudeTempDir(), 'bundled-skills', HA_VERSION, nonce)
   },
 )
 

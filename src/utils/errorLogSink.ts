@@ -13,6 +13,7 @@
 import axios from 'axios'
 import { dirname, join } from 'path'
 import { getSessionId } from '../bootstrap/state.js'
+import { HA_VERSION } from '../constants/version.js'
 import { createBufferedWriter } from './bufferedWriter.js'
 import { CACHE_PATHS } from './cachePaths.js'
 import { registerCleanup } from './cleanupRegistry.js'
@@ -119,7 +120,7 @@ function appendToLog(path: string, message: object): void {
     cwd: getFsImplementation().cwd(),
     userType: process.env.USER_TYPE,
     sessionId: getSessionId(),
-    version: '2.1.88',
+    version: HA_VERSION,
   }
 
   getLogWriter(path).write(messageWithTimestamp)

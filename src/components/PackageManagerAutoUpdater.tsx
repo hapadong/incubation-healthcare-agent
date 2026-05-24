@@ -1,5 +1,6 @@
 import { c as _c } from "react/compiler-runtime";
 import * as React from 'react';
+import { HA_VERSION } from '../constants/version.js';
 import { useState } from 'react';
 import { useInterval } from 'usehooks-ts';
 import { Text } from '../ink.js';
@@ -37,17 +38,17 @@ export function PackageManagerAutoUpdater(t0) {
       const maxVersion = await getMaxVersion();
       if (maxVersion && latest && gt(latest, maxVersion)) {
         logForDebugging(`PackageManagerAutoUpdater: maxVersion ${maxVersion} is set, capping update from ${latest} to ${maxVersion}`);
-        if (gte('2.1.88', maxVersion)) {
-          logForDebugging(`PackageManagerAutoUpdater: current version ${'2.1.88'} is already at or above maxVersion ${maxVersion}, skipping update`);
+        if (gte(HA_VERSION, maxVersion)) {
+          logForDebugging(`PackageManagerAutoUpdater: current version ${HA_VERSION} is already at or above maxVersion ${maxVersion}, skipping update`);
           setUpdateAvailable(false);
           return;
         }
         latest = maxVersion;
       }
-      const hasUpdate = latest && !gte('2.1.88', latest) && !shouldSkipVersion(latest);
+      const hasUpdate = latest && !gte(HA_VERSION, latest) && !shouldSkipVersion(latest);
       setUpdateAvailable(!!hasUpdate);
       if (hasUpdate) {
-        logForDebugging(`PackageManagerAutoUpdater: Update available ${'2.1.88'} -> ${latest}`);
+        logForDebugging(`PackageManagerAutoUpdater: Update available ${HA_VERSION} -> ${latest}`);
       }
     };
     $[0] = t1;
@@ -76,7 +77,7 @@ export function PackageManagerAutoUpdater(t0) {
   const updateCommand = packageManager === "homebrew" ? "brew upgrade claude-code" : packageManager === "winget" ? "winget upgrade Anthropic.ClaudeCode" : packageManager === "apk" ? "apk upgrade claude-code" : "your package manager update command";
   let t4;
   if ($[3] !== verbose) {
-    t4 = verbose && <Text dimColor={true} wrap="truncate">currentVersion: {'2.1.88'}</Text>;
+    t4 = verbose && <Text dimColor={true} wrap="truncate">currentVersion: {HA_VERSION}</Text>;
     $[3] = verbose;
     $[4] = t4;
   } else {

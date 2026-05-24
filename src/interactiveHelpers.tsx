@@ -1,4 +1,5 @@
 import { feature } from '../stubs/bun-bundle.js';
+import { HA_VERSION } from './constants/version.js';
 import { appendFileSync } from 'fs';
 import React from 'react';
 import { logEvent } from 'src/services/analytics/index.js';
@@ -33,7 +34,7 @@ export function completeOnboarding(): void {
   saveGlobalConfig(current => ({
     ...current,
     hasCompletedOnboarding: true,
-    lastOnboardingVersion: '2.1.88'
+    lastOnboardingVersion: HA_VERSION
   }));
 }
 export function showDialog<T = void>(root: Root, renderer: (done: (result: T) => void) => React.ReactNode): Promise<T> {

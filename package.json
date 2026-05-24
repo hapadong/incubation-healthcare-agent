@@ -1,6 +1,6 @@
 {
   "name": "@verity/health-agent",
-  "version": "2.1.88",
+  "version": "0.1.0",
   "description": "Verity Health Agent — clinical AI assistant",
   "type": "module",
   "private": true,
