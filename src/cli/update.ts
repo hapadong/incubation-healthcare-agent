@@ -121,7 +121,7 @@ export async function update() {
     writeToStdout('\n')
 
     if (packageManager === 'homebrew') {
-      writeToStdout('Claude is managed by Homebrew.\n')
+      writeToStdout('HealthAgent is managed by Homebrew.\n')
       const latest = await getLatestVersion(channel)
       if (latest && !gte(HA_VERSION, latest)) {
         writeToStdout(`Update available: ${HA_VERSION} → ${latest}\n`)
@@ -129,10 +129,10 @@ export async function update() {
         writeToStdout('To update, run:\n')
         writeToStdout(chalk.bold('  brew upgrade claude-code') + '\n')
       } else {
-        writeToStdout('Claude is up to date!\n')
+        writeToStdout('HealthAgent is up to date!\n')
       }
     } else if (packageManager === 'winget') {
-      writeToStdout('Claude is managed by winget.\n')
+      writeToStdout('HealthAgent is managed by winget.\n')
       const latest = await getLatestVersion(channel)
       if (latest && !gte(HA_VERSION, latest)) {
         writeToStdout(`Update available: ${HA_VERSION} → ${latest}\n`)
@@ -142,10 +142,10 @@ export async function update() {
           chalk.bold('  winget upgrade Anthropic.ClaudeCode') + '\n',
         )
       } else {
-        writeToStdout('Claude is up to date!\n')
+        writeToStdout('HealthAgent is up to date!\n')
       }
     } else if (packageManager === 'apk') {
-      writeToStdout('Claude is managed by apk.\n')
+      writeToStdout('HealthAgent is managed by apk.\n')
       const latest = await getLatestVersion(channel)
       if (latest && !gte(HA_VERSION, latest)) {
         writeToStdout(`Update available: ${HA_VERSION} → ${latest}\n`)
@@ -153,13 +153,13 @@ export async function update() {
         writeToStdout('To update, run:\n')
         writeToStdout(chalk.bold('  apk upgrade claude-code') + '\n')
       } else {
-        writeToStdout('Claude is up to date!\n')
+        writeToStdout('HealthAgent is up to date!\n')
       }
     } else {
       // pacman, deb, and rpm don't get specific commands because they each have
       // multiple frontends (pacman: yay/paru/makepkg, deb: apt/apt-get/aptitude/nala,
       // rpm: dnf/yum/zypper)
-      writeToStdout('Claude is managed by a package manager.\n')
+      writeToStdout('HealthAgent is managed by a package manager.\n')
       writeToStdout('Please use your package manager to update.\n')
     }
 
@@ -226,7 +226,7 @@ export async function update() {
           : ''
         writeToStdout(
           chalk.yellow(
-            `Another Claude process${pidInfo} is currently running. Please try again in a moment.`,
+            `Another HealthAgent process${pidInfo} is currently running. Please try again in a moment.`,
           ) + '\n',
         )
         await gracefulShutdown(0)
@@ -239,7 +239,7 @@ export async function update() {
 
       if (result.latestVersion === HA_VERSION) {
         writeToStdout(
-          chalk.green(`Claude Code is up to date (${HA_VERSION})`) + '\n',
+          chalk.green(`HealthAgent is up to date (${HA_VERSION})`) + '\n',
         )
       } else {
         writeToStdout(

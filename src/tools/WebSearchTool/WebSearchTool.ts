@@ -249,7 +249,7 @@ export const WebSearchTool = buildTool({
   shouldDefer: false,
   alwaysLoad: true,
   async description(input) {
-    return `Claude wants to search the web for: ${input.query}`
+    return `HealthAgent wants to search the web for: ${input.query}`
   },
   userFacingName() {
     return 'Web Search'

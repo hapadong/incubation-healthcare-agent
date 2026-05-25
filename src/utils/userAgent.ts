@@ -8,5 +8,5 @@
 import { HA_VERSION } from '../constants/version.js'
 
 export function getClaudeCodeUserAgent(): string {
-  return `claude-code/${HA_VERSION}`
+  return `health-agent/${HA_VERSION}`
 }
